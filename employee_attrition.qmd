@@ -1,0 +1,308 @@
+---
+title: "Why Are Employees Leaving?"
+format: html
+knitr:
+  opts_chunk:
+    echo: FALSE
+    warning: FALSE
+    message: FALSE
+---
+
+Employee attrition, the departure of employees from an organization, presents a significant and multifaceted challenge. High turnover rates can have far-reaching consequences, impacting not only financial performance but also organizational culture and long-term sustainability. These consequences include:
+
+- **Loss of Institutional Knowledge:** The departure of long-tenured employees results in the loss of invaluable expertise, specialized skills, and deep understanding of organizational processes. This "brain drain" can hinder innovation and efficiency.
+- **Substantial Financial Costs:** The process of replacing employees is expensive. It encompasses recruitment advertising, interviewing, onboarding, and training new hires.  These costs are amplified when turnover is consistently high, diverting resources from other critical areas.
+- **Disrupted Performance and Morale:** High turnover disrupts team workflows, creating instability and uncertainty. Remaining employees may experience increased workloads, stress, and decreased morale, leading to lower productivity and engagement.
+- **Impaired Talent Acquisition:** A reputation for high employee turnover can significantly damage an organization's ability to attract and retain top talent.  Potential candidates may perceive the company as unstable or lacking in employee support and development opportunities.
+- **Negative Brand Reputation:** Beyond recruitment, high turnover can negatively impact an organization's overall image. Customers, partners, and the wider community may perceive the company as poorly managed or undesirable to work for.
+
+
+
+## Identifying and Addressing High Turnover
+
+Analyzing organizational and employee data can provide a clear understanding of the contributing factors influencing turnover. Only then can I develop data-driven targeted recommendations and interventions to address them.
+
+To investigate the drivers of employee attrition, I analyze a dataset containing information on various employee characteristics and work-life factors. This dataset allows me to explore potential relationships between these factors and an employee's decision to leave the company. I will begin with exploratory data analysis to visualize patterns and trends, and then I will build a statistical model to predict the likelihood of attrition based on these key factors.
+
+
+```{r}
+#| label: setup
+#| include: false
+
+suppressPackageStartupMessages({
+  library(tidyverse)
+  library(ggplot2)
+  library(reactable)
+})
+
+# Load the data
+data <- read.csv("data/attrition-dataset.csv")
+source("theme/my_swd_theme.R")
+
+```
+
+
+```{r}
+# Applying transformations to multiple variables
+data <- data |> 
+  mutate(across(where(is.character), as_factor)) |> 
+  mutate(Attrition_binary = if_else(Attrition == "Yes", 1, 0)) |> 
+  relocate(Attrition_binary, .after = Attrition) |> 
+  mutate(
+    Attrition = fct_relevel(Attrition, "Yes", "No"),
+    BusinessTravel = fct_relevel(BusinessTravel, "Non-Travel","Travel_Rarely","Travel_Frequently"),
+    Gender = fct_relevel(Gender, "Male", "Female"),
+    OverTime = fct_relevel(OverTime, "No", "Yes"),
+  )
+```
+
+## Initial Exploration: Understanding the Landscape of Attrition
+
+Before diving into specific factors, I begin by gaining a broad understanding of the dataset. I examine the distribution of key variables, paying attention to how these distributions differ between employees who have left the company (Attrition = Yes) and those who remain (Attrition = No). This initial exploration helps me identify potential areas of interest and formulate hypotheses about the drivers of attrition.
+
+
+```{r}
+# Select categorical variables from the data
+categorical_vars <- data |> 
+    select(where(is.factor), -Attrition) |> 
+    colnames()
+
+# Select numerical variables from the data
+# numerical_vars <- data |> 
+#   select(where(is.numeric)) |> 
+#   colnames()
+
+```
+
+```{r}
+# Generate bar plots for each categorical variable, filled by Attrition status
+cat_plot_list <- map(categorical_vars, ~ 
+  data |> 
+    ggplot(aes_string(x = ., fill = "Attrition")) + 
+    geom_bar(position = "dodge") + 
+    labs(x = ., fill = "Attrition") + 
+    ggtitle(paste("Bar plot of", ., "colored by Attrition")) +
+    theme_minimal() +
+      theme(
+        axis.text.x = element_text(angle = 45, hjust = 1),
+        plot.background = element_rect(fill = 'white'),
+        # axis.title.y = element_blank(),
+        strip.text = element_blank()
+      )
+)
+
+for(plot in cat_plot_list) {
+  print(plot)
+}
+```
+
+
+
+## Research Questions
+
+My initial exploration suggests a potential link between work-life balance and employee attrition. To investigate this further, I focus on the following key research questions:
+
+1.  **Primary Question:** How do key work-life balance factors (business travel, overtime, distance from home, and self-reported work-life balance) influence the likelihood of employee attrition?
+
+2.  **Secondary Question:** Do the effects of these work-life balance factors on attrition differ across employee subgroups (age, job role, and department)?
+
+**Variables of Interest:**
+
+- **Outcome Variable:** Attrition (binary: Yes/No)
+- **Predictor Variables (Work-Life Balance):**
+  - BusinessTravel (categorical)
+  - DistanceFromHome (numeric)
+  - OverTime (binary: Yes/No)
+  - WorkLifeBalance (numeric, treated as ordinal)
+- **Grouping Variables (for Subgroup Analysis):**
+  - JobRole (categorical)
+  - Age (numeric)
+  - Department (categorical)
+
+
+
+## Analyzing Work-Life Balance Variables: A Deeper Dive
+
+Having established the importance of work-life balance in my research question, I now examine specific variables related to this theme: Business Travel, Distance From Home, OverTime, and WorkLifeBalance. 
+
+I aim to understand how each of these factors relates to employee attrition, and whether these relationships support my initial hypotheses.
+
+
+```{r}
+wlb_vars <- data |> 
+  select(c(BusinessTravel, DistanceFromHome, OverTime, WorkLifeBalance, Gender, Age, Department, Attrition, Attrition_binary))
+```
+
+
+### Business Travel grouped by Attrition
+
+
+```{r}
+
+busi <- wlb_vars |> 
+  group_by(BusinessTravel, Attrition) |> 
+  summarise(count = n()) |> 
+  mutate(percent = round(prop.table(count) * 100)) # to calculate proportions for each group
+  
+ggplot(busi, aes(x = BusinessTravel, y = count, fill = Attrition)) +
+  geom_col(position = "dodge") +
+  lims(y = c(0, 1000)) +
+  geom_text(aes(label = paste0(percent, "%"), parse = TRUE), data = busi |> filter(Attrition == "Yes"), hjust = 1.8, vjust = -1) +
+  geom_text(aes(label = paste0(percent, "%"), parse = TRUE), data = busi |> filter(Attrition == "No"), hjust = -1.1, vjust = -1, color = "black") +
+  ggtitle("Business Travel grouped by Attrition") +
+  theme_minimal() +
+  theme(
+   # axis.text.x = element_text(angle=60, hjust=1),
+   axis.title.y = element_blank(),
+   axis.title.x = element_blank(),
+   strip.text = element_blank(),
+   )
+
+```
+
+#### Interpretation and Insights:  
+
+The plot reveals a clear association between business travel frequency and attrition: **Employees who travel frequently are significantly more likely to leave the company compared to those who travel rarely or not at all**. This suggests that the demands and potential stress associated with frequent travel may contribute to burnout and dissatisfaction, leading to higher turnover. 
+
+This finding highlights a potential area for intervention: the company could explore ways to reduce the burden of frequent travel. This could include:
+- Offering more flexible travel arrangements
+- Providing additional support to frequent travelers
+- Re-evaluating the necessity of certain trips
+
+
+---
+
+
+### Distance from home grouped by Attrition
+
+```{r}
+
+distance <- wlb_vars 
+  
+ggplot(distance, aes(x = DistanceFromHome, fill = Attrition)) +
+  geom_density() +
+  ggtitle("Distance From Home grouped by Attrition") +
+  theme_minimal() +
+  theme(
+   # axis.text.x = element_text(angle=60, hjust=1),
+   axis.title.y = element_blank(),
+   strip.text = element_blank(),
+   )
+```
+
+#### Interpretation and Insights:  
+
+The density plot indicates a higher concentration of former employees (Attrition = Yes) living further from the office. While not a definitive causal relationship, this suggests that longer commutes may contribute to attrition. This could be due to increased stress, reduced work-life balance, or a weaker connection to the company culture. 
+
+This finding could inform decisions about remote work policies, flexible work arrangements, or even the provision of transportation assistance. It's important to note the overlap in distributions; many employees with longer commutes do stay, indicating other factors are also at play. 
+
+
+---
+
+
+#### Overtime grouped by Attrition
+
+```{r}
+
+overtime <- wlb_vars |> 
+  group_by(OverTime, Attrition) |> 
+  summarise(count = n()) |> 
+  mutate(percent = round(prop.table(count) * 100)) # to calculate proportions for each group
+  
+ggplot(overtime, aes(x = OverTime, y = count, fill = Attrition)) +
+  geom_col(position = "dodge") +
+  lims(y = c(0, 1000)) +
+  geom_text(aes(label = paste0(percent, "%"), parse = TRUE), data = overtime |> filter(Attrition == "Yes"), hjust = 2.2, vjust = -1) +
+  geom_text(aes(label = paste0(percent, "%"), parse = TRUE), data = overtime |> filter(Attrition == "No"), hjust = -1.5, vjust = -1, color = "black") +
+  ggtitle("Overtime Hours grouped by Attrition") +
+  theme_minimal() +
+  theme(
+   axis.text.x = element_text(angle=60, hjust=1),
+   axis.title.y = element_blank(),
+   strip.text = element_blank(),
+   )
+
+```
+
+#### Interpretation and Insights:  
+
+The bar plot clearly shows that employees who work overtime are considerably more likely to leave the company. This strongly suggests that excessive work hours contribute to attrition, potentially due to burnout, reduced work-life balance, and increased stress. 
+
+This is a critical area for HR to address. Possible interventions could include workload management strategies, stricter overtime policies, or increased staffing levels. 
+
+
+---
+
+
+### Work-life Balance Survey grouped by Attrition
+
+```{r}
+
+wlb <- wlb_vars |> 
+  mutate(WorkLifeBalance = as_factor(WorkLifeBalance)) |> 
+  group_by(WorkLifeBalance, Attrition) |>
+  summarise(count = n()) |> 
+  mutate(percent = round(prop.table(count) * 100)) # to calculate proportions for each group
+  
+ggplot(wlb, aes(x = WorkLifeBalance, y = count, fill = Attrition)) +
+  geom_col(position = "dodge") +
+  lims(y = c(0, 800)) +
+  geom_text(aes(label = paste0(percent, "%"), parse = TRUE), data = wlb |> filter(Attrition == "Yes"), hjust = 1.4, vjust = -1) +
+  geom_text(aes(label = paste0(percent, "%"), parse = TRUE), data = wlb |> filter(Attrition == "No"), hjust = -.8, vjust = -1, color = "black") +
+  ggtitle("Work-Life Balance survey grouped by Attrition") +
+  theme_minimal() +
+  theme(
+   axis.text.x = element_text(angle=60, hjust=1),
+   axis.title.y = element_blank(),
+   strip.text = element_blank(),
+   )
+```
+
+#### Interpretation and Insights:  
+
+The plot shows a notable difference in attrition rates based on employee-reported work-life balance scores. Employees who rated their work-life balance as "1" (presumably the lowest rating) were significantly more likely to leave. While those with ratings of "2," "3," and "4" also show attrition, the rate is much lower. 
+
+This reinforces the importance of perceived work-life balance as a key factor in employee retention. The company should prioritize initiatives that promote a healthy work-life balance, such as flexible work arrangements, wellness programs, and clear expectations regarding working hours. It's crucial to understand why some employees report such low work-life balance scores. 
+
+
+---
+
+
+## Regression
+
+### Modeling Attrition: Quantifying the Impact of Work-Life Balance
+
+Based on my exploratory analysis, which highlighted potential relationships between work-life balance factors and attrition, I now build a logistic regression model. This model allows me to quantify the impact of these factors on the *probability* of an employee leaving the company, while controlling for other variables. I specifically focus on WorkLifeBalance, BusinessTravel, DistanceFromHome, and OverTime, as these variables showed the strongest visual associations with attrition in my earlier analysis.
+
+
+```{r}
+# Fit a logistic regression model using WorkLifeBalance, BusinessTravel, DistanceFromHome, and OverTime as predictors
+logistic_model <- glm(Attrition_binary ~ WorkLifeBalance + BusinessTravel + DistanceFromHome + OverTime, data=wlb_vars, family="binomial")
+
+# Display the summary of the fitted logistic regression model
+summary(logistic_model)
+```
+
+#### Interpretation and Insights
+
+The logistic regression model confirms my visual observations and provides quantifiable insights:
+
+- WorkLifeBalance (-0.24): A better work-life balance is associated with a lower probability of attrition.
+This coefficient suggests that interventions aimed at improving work-life balance (e.g., flexible work, wellness programs) could have a measurable impact on reducing attrition.
+
+- BusinessTravel: 
+  - Travel Rarely (0.68): Employees who travel rarely are more likely to leave compared to those who don't travel at all.  
+  - Travel Frequently (1.33): Employees who travel frequently are even more likely to leave than those who travel rarely.
+The significant positive coefficients for both "Travel Rarely" and "Travel Frequently" (compared to "Non-Travel") highlight the importance of addressing the challenges associated with business travel. The company should investigate the specific reasons why even rare travel is associated with higher attrition.
+
+- DistanceFromHome (0.03): For every additional unit (like mile or kilometer) further away from home an employee lives, the likelihood of leaving increases slightly.
+Even a small increase in the coefficient for distance suggests that, all else being equal, employees with longer commutes are slightly more likely to leave. This reinforces the potential value of remote work options or relocation assistance.
+
+- OverTime (1.32): Employees who have to work overtime are significantly more likely to leave the company.
+The large positive coefficient for OverTime provides strong statistical evidence that working overtime is a significant predictor of attrition. This highlights the urgency of addressing workload imbalances and promoting a culture that values work-life balance.
+
+**Notably, these coefficients represent the independent effect of each factor, holding the other factors constant**. For example, even after accounting for distance from home and work-life balance, working overtime still significantly increases the likelihood of attrition.
+
+
+
+

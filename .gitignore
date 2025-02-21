@@ -1,0 +1,11 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+.Renviron
+.vscode
+.DS_Store
+.Rprofile
+theme
+unused.R
+employee_attrition_files
