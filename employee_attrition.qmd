@@ -6,6 +6,8 @@ knitr:
     echo: FALSE
     warning: FALSE
     message: FALSE
+editor: 
+  render-on-save: true
 ---
 
 Employee attrition, the departure of employees from an organization, presents a significant and multifaceted challenge. High turnover rates can have far-reaching consequences, impacting not only financial performance but also organizational culture and long-term sustainability. These consequences include:
@@ -22,7 +24,12 @@ Employee attrition, the departure of employees from an organization, presents a 
 
 Analyzing organizational and employee data can provide a clear understanding of the contributing factors influencing turnover. Only then can I develop data-driven targeted recommendations and interventions to address them.
 
-To investigate the drivers of employee attrition, I analyze a dataset containing information on various employee characteristics and work-life factors. This dataset allows me to explore potential relationships between these factors and an employee's decision to leave the company. I will begin with exploratory data analysis to visualize patterns and trends, and then I will build a statistical model to predict the likelihood of attrition based on these key factors.
+I sought to investigate examine the potential link between work-life balance and an employee's decision to leave the company. I focus on the following key research question:
+
+- **Primary Question:** How do key work-life balance factors (business travel, overtime, distance from home, and self-reported work-life balance) influence the likelihood of employee attrition?
+
+I will begin with exploratory data analysis to visualize patterns and trends, and then I will build a statistical model to predict the likelihood of attrition based on these key factors.
+
 
 
 ```{r}
@@ -31,93 +38,357 @@ To investigate the drivers of employee attrition, I analyze a dataset containing
 
 suppressPackageStartupMessages({
   library(tidyverse)
+  library(tidymodels)
   library(ggplot2)
-  library(reactable)
+  library(kableExtra)
+  library(scales)
+  library(ggrepel)
+  library(grid)
+  library(gridExtra)
+  library(gridtext)
 })
 
 # Load the data
 data <- read.csv("data/attrition-dataset.csv")
-source("theme/my_swd_theme.R")
+source("theme/my_theme.R")
+source("theme/project_theme.R")
 
 ```
+
+
+```{r}
+# Data quality assessment
+# data_quality <- data |>
+#   summarise(across(everything(), 
+#                   list(missing = ~sum(is.na(.))/length(.)*100,
+#                        unique = ~n_distinct(.),
+#                        min = ~ifelse(is.numeric(.), min(., na.rm = TRUE), NA),
+#                        max = ~ifelse(is.numeric(.), max(., na.rm = TRUE), NA)))) |>
+#   pivot_longer(everything(), 
+#                names_to = c("column", "stat"), 
+#                names_pattern = "(.*)_(.*)") |>
+#   pivot_wider(names_from = stat, values_from = value)
+# 
+# kbl(data_quality) |>
+#   kable_styling() |>
+#   add_header_above(c("Data Quality Assessment" = 5))
+```
+
+
 
 
 ```{r}
 # Applying transformations to multiple variables
-data <- data |> 
-  mutate(across(where(is.character), as_factor)) |> 
-  mutate(Attrition_binary = if_else(Attrition == "Yes", 1, 0)) |> 
-  relocate(Attrition_binary, .after = Attrition) |> 
-  mutate(
-    Attrition = fct_relevel(Attrition, "Yes", "No"),
-    BusinessTravel = fct_relevel(BusinessTravel, "Non-Travel","Travel_Rarely","Travel_Frequently"),
-    Gender = fct_relevel(Gender, "Male", "Female"),
-    OverTime = fct_relevel(OverTime, "No", "Yes"),
-  )
+# data <- data |>
+#   mutate(across(where(is.character), as_factor)) |>
+#   mutate(Attrition_binary = if_else(Attrition == "Yes", 1, 0)) |>
+#   relocate(Attrition_binary, .after = Attrition) |>
+#   mutate(
+#     Attrition = fct_relevel(Attrition, "Yes", "No"),
+#     BusinessTravel = fct_relevel(BusinessTravel, "Non-Travel", "Travel_Rarely", "Travel_Frequently"),
+#     Gender = fct_relevel(Gender, "Male", "Female"),
+#     OverTime = fct_relevel(OverTime, "No", "Yes")
+#   )
 ```
 
 ## Initial Exploration: Understanding the Landscape of Attrition
 
-Before diving into specific factors, I begin by gaining a broad understanding of the dataset. I examine the distribution of key variables, paying attention to how these distributions differ between employees who have left the company (Attrition = Yes) and those who remain (Attrition = No). This initial exploration helps me identify potential areas of interest and formulate hypotheses about the drivers of attrition.
+Before diving into specific factors, I begin by gaining a broad understanding of the dataset. 
 
 
+I first view the total company attrition rate
 ```{r}
-# Select categorical variables from the data
-categorical_vars <- data |> 
-    select(where(is.factor), -Attrition) |> 
-    colnames()
+# Total company attrition
 
-# Select numerical variables from the data
-# numerical_vars <- data |> 
-#   select(where(is.numeric)) |> 
-#   colnames()
+total_attrition <- data |> 
+  group_by(Attrition) |> 
+  summarise(n = n()) |> 
+  mutate(percentage = n / sum(n) * 100)
 
+
+ggplot(total_attrition, aes(x = Attrition, y = percentage, fill = Attrition)) +
+  geom_col(width = 0.7) +
+  scale_y_continuous(labels = label_percent(scale = 1), breaks = c(0, 25, 50, 75, 100), limits = c(0,105)) + # Set y-axis limit to 0-100 for percentage
+  geom_text(aes(label = paste0(round(percentage), "%")), data = total_attrition |> filter(Attrition == "Yes"), vjust = -1, size = 4) +
+  geom_text(aes(label = paste0(round(percentage), "%")), data = total_attrition |> filter(Attrition == "No"), vjust = -1, size = 4) +
+  # paste0(percent, "%"), parse = TRUE
+  ylab("Percentage of Employees") +
+  xlab("Attrition") +
+  ggtitle("Company-wide Employee Attrition Rate (%)") +
+  project_theme() +
+  theme(
+    # axis.title.y = element_blank()
+  ) +
+  scale_fill_manual(
+    values = c(STEELBLUE, SALMON),
+    labels = c("Yes" = "Left Company", "No" = "Stayed"))
 ```
 
+
+
+16% of employees left while 84% stayed.
+
+
+
+
 ```{r}
-# Generate bar plots for each categorical variable, filled by Attrition status
-cat_plot_list <- map(categorical_vars, ~ 
-  data |> 
-    ggplot(aes_string(x = ., fill = "Attrition")) + 
-    geom_bar(position = "dodge") + 
-    labs(x = ., fill = "Attrition") + 
-    ggtitle(paste("Bar plot of", ., "colored by Attrition")) +
-    theme_minimal() +
-      theme(
-        axis.text.x = element_text(angle = 45, hjust = 1),
-        plot.background = element_rect(fill = 'white'),
-        # axis.title.y = element_blank(),
-        strip.text = element_blank()
-      )
+# Improved Job Role Attrition visualization following storytelling with data principles
+
+# Calculate job role attrition metrics
+attrition_jobrole <- data |>
+  group_by(JobRole, Attrition) |>
+  summarise(count = n(), .groups = 'drop') |>
+  # Calculate totals and percentages by job role
+  group_by(JobRole) |>
+  mutate(
+    role_total = sum(count),
+    percentage = round(count / role_total * 100, 1)
+  ) |>
+  ungroup()
+
+# Create a separate dataframe for attrition rates by role
+attrition_rates <- attrition_jobrole |>
+  filter(Attrition == "Yes") |>
+  select(JobRole, count, role_total, percentage) |>
+  # Sort by attrition rate for highlighting
+  arrange(desc(percentage)) |>
+  # Add rank for sorting
+  mutate(
+    rank = row_number(),
+    # Create formatted labels
+    rate_label = paste0(percentage, "%"),
+    count_label = paste0(count, " of ", role_total)
+  )
+
+# Separate data for 'Yes' and 'No' attrition for the pyramid plot
+attrition_yes <- attrition_jobrole |>
+  filter(Attrition == 'Yes') |>
+  mutate(
+    count_neg = -count,  # Make 'Yes' counts negative for pyramid effect
+    # Create percentage label
+    label = paste0(percentage, "%")
+  )
+
+attrition_no <- attrition_jobrole |>
+  filter(Attrition == 'No') |>
+  mutate(
+    # Create percentage label
+    label = paste0(percentage, "%")
+  )
+
+# Join the rank information to the yes/no dataframes
+attrition_yes <- attrition_yes |>
+  left_join(attrition_rates |> select(JobRole, rank), by = "JobRole")
+
+attrition_no <- attrition_no |>
+  left_join(attrition_rates |> select(JobRole, rank), by = "JobRole")
+
+
+
+# Create the improved pyramid plot
+ggplot() +
+  geom_bar(
+    data = attrition_yes, 
+    aes(
+      x = reorder(JobRole, -rank), 
+      y = count_neg
+    ), 
+    stat = "identity", 
+    width = 0.7,
+    fill = SALMON  # Red for all attrition bars
+  ) +
+  geom_bar(
+    data = attrition_no, 
+    aes(
+      x = reorder(JobRole, -rank), 
+      y = count
+    ), 
+    stat = "identity", 
+    width = 0.7,
+    fill = STEELBLUE  # Blue for all retention bars
+  ) +
+  # Add percentage labels
+  geom_text(
+    data = attrition_no, 
+    aes(
+      x = reorder(JobRole, -rank), 
+      y = count + 10, 
+      label = label
+    ),
+    hjust = 0, 
+    size = 3.5,
+    color = STEELBLUE,
+    fontface = "bold"
+  ) +
+  geom_text(
+    data = attrition_yes, 
+    aes(
+      x = reorder(JobRole, -rank), 
+      y = count_neg - 10, 
+      label = label
+    ),
+    hjust = 1, 
+    size = 3.5,
+    color = SALMON,  # Red for all attrition percentage labels
+    fontface = "bold"
+  ) +
+  # Add count labels
+  geom_text(
+    data = attrition_no, 
+    aes(
+      x = reorder(JobRole, -rank), 
+      y = count/2, 
+      label = count
+    ),
+    size = 3,
+    color = "white"
+  ) +
+  geom_text(
+    data = attrition_yes, 
+    aes(
+      x = reorder(JobRole, -rank), 
+      y = count_neg/2, 
+      label = abs(count_neg)
+    ),
+    size = 3,
+    color = "white"
+  ) +
+  # Add a reference line for the company average
+  geom_hline(
+    yintercept = 0,
+    color = "#666666",
+    size = 0.5
+  ) +
+  scale_y_continuous(
+    labels = function(x) paste0(abs(x)),
+    breaks = seq(-300, 300, 100)
+  ) +
+  coord_flip() +
+  # Add meaningful labels
+  labs(
+    title = "Job Roles with Highest Attrition Risk",
+    subtitle = "Percentage of employees who left vs. stayed by job role",
+    x = NULL,
+    y = "Number of Employees",
+    caption = "Red bars indicate roles with highest attrition rates"
+  ) +
+  project_theme() +
+  theme(
+    plot.caption.position = "panel"
+  ) +
+  expand_limits(y=c(-100, 300))
+```
+
+
+
+I can see that the Laboratory Technician role had the highest number of employees leaving while the Research Director role had the fewest. 
+
+However, the Sales Representative role had the highest turnover percentage at 66%.
+
+
+```{r}
+# Attrition by Department 
+
+attrition_dept <- data |> 
+  filter(Attrition == "Yes") |> 
+  group_by(Department) |> 
+  summarise(count = n()) |> 
+  mutate(percentage = count / sum(count) * 100)
+
+department_colors <- c(
+  "Research & Development" = STEELBLUE,
+  "Sales" = SALMON,
+  "Human Resources" = METALGEAR
 )
 
-for(plot in cat_plot_list) {
-  print(plot)
-}
+ggplot(attrition_dept, aes(x = 2, y = percentage, fill = Department)) +
+  geom_bar(stat = "identity", color = "white", linewidth = 0.2) +
+  coord_polar(theta = "y", start = 0) +
+  scale_fill_manual(values = department_colors) +
+  geom_label_repel(aes(label = paste0(sprintf("%.1f", percentage), "%")),
+                   position = position_stack(vjust = 0.5), # Initial position - may be overridden by repel
+                   color = "black", size = 4,
+                   segment.size = 0.3, segment.color = "black",
+                   show.legend = FALSE, # Prevent labels from appearing in legend
+                   box.padding = 0.5, # Adjust padding around label box
+                   label.padding = unit(0.3, "lines"), # Adjust padding inside label box
+                   label.r = unit(0.15, "lines") # Rounded corners for label box
+  ) +
+  xlim(0.5, 2.5) + # Create the hole in the middle
+  ggtitle("Employee Attrition by Department") +
+  labs(caption = paste0(
+  "• Research & Development: ", 
+  "13.8% (accounts for 56.1% of all departures)\n",
+  "• Sales: ", 
+  "20.6% - highest attrition rate (accounts for 38.8% of all departures)\n",
+  "• Human Resources: ", 
+  "19% (accounts for 5.1% of all departures)"
+)) +
+  # project_theme() +
+  theme_void() + # Remove default theme elements
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14, face = "bold", color = BLACK), # Centered, bold title
+    legend.position = "right",
+    legend.title = element_blank(), # Remove legend title
+    legend.text = element_text(color = BLACK, margin = margin(r=10, l=5)), # Add margin to legend text
+    plot.background = element_rect(fill = LIGHTBEIGE, color = NA), # Background color
+    legend.key = element_rect(fill = NA, color = NA),
+    plot.caption = element_text(
+      hjust = 0, 
+      size = 10, 
+      lineheight = 1.2, 
+      margin = margin(t = 5, l = 10, b = 10),
+      face = "plain",
+      color = "#333333"
+    )
+  ) +
+  guides(fill = guide_legend(override.aes = list(
+    shape = 22, 
+    size = 8, 
+    color = GRAY50, 
+    label = "" 
+  )))
+
+
 ```
 
 
 
-## Research Questions
+By department, 56% of all attrition came from the Research & Development department while the least percent of all attrition (5%) came from the Human Resources department.
 
-My initial exploration suggests a potential link between work-life balance and employee attrition. To investigate this further, I focus on the following key research questions:
 
-1.  **Primary Question:** How do key work-life balance factors (business travel, overtime, distance from home, and self-reported work-life balance) influence the likelihood of employee attrition?
+## Attrition by Job Role and Department
 
-2.  **Secondary Question:** Do the effects of these work-life balance factors on attrition differ across employee subgroups (age, job role, and department)?
+```{r}
+# Create a heatmap of attrition by job role and department
+heatmap_data <- data |>
+  mutate(Attrition_binary = if_else(Attrition == "Yes", 1, 0)) |> 
+  group_by(JobRole, Department) |>
+  summarise(
+    AttritionRate = mean(Attrition_binary) * 100,
+    EmployeeCount = n(),
+    .groups = 'drop'
+  )
 
-**Variables of Interest:**
+ggplot(heatmap_data, aes(x = JobRole, y = Department, fill = AttritionRate)) +
+  geom_tile(color = "white", size = 0.5) +
+  # geom_text(aes(label = sprintf("%.1f%%\n(n=%d)", AttritionRate, EmployeeCount)),
+  #           color = "black",
+  #           size = 3) +
+  geom_text(aes(label = sprintf("%.1f%%", AttritionRate, EmployeeCount)),
+            color = "black",
+            size = 3) +
+  scale_fill_gradient2(low = STEELBLUE, mid = "white", high = SALMON,
+                      midpoint = median(heatmap_data$AttritionRate),
+                      name = "Attrition Rate") +
+  project_theme() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        panel.grid = element_blank()) +
+  labs(title = "Attrition Rates by Job Role and Department",
+       subtitle = "Showing percentage and count of employees in each group")
+```
 
-- **Outcome Variable:** Attrition (binary: Yes/No)
-- **Predictor Variables (Work-Life Balance):**
-  - BusinessTravel (categorical)
-  - DistanceFromHome (numeric)
-  - OverTime (binary: Yes/No)
-  - WorkLifeBalance (numeric, treated as ordinal)
-- **Grouping Variables (for Subgroup Analysis):**
-  - JobRole (categorical)
-  - Age (numeric)
-  - Department (categorical)
+
 
 
 
@@ -130,6 +401,7 @@ I aim to understand how each of these factors relates to employee attrition, and
 
 ```{r}
 wlb_vars <- data |> 
+  mutate(Attrition_binary = if_else(Attrition == "Yes", 1, 0)) |> 
   select(c(BusinessTravel, DistanceFromHome, OverTime, WorkLifeBalance, Gender, Age, Department, Attrition, Attrition_binary))
 ```
 
@@ -137,28 +409,87 @@ wlb_vars <- data |>
 ### Business Travel grouped by Attrition
 
 
-```{r}
 
-busi <- wlb_vars |> 
-  group_by(BusinessTravel, Attrition) |> 
-  summarise(count = n()) |> 
-  mutate(percent = round(prop.table(count) * 100)) # to calculate proportions for each group
-  
-ggplot(busi, aes(x = BusinessTravel, y = count, fill = Attrition)) +
-  geom_col(position = "dodge") +
-  lims(y = c(0, 1000)) +
-  geom_text(aes(label = paste0(percent, "%"), parse = TRUE), data = busi |> filter(Attrition == "Yes"), hjust = 1.8, vjust = -1) +
-  geom_text(aes(label = paste0(percent, "%"), parse = TRUE), data = busi |> filter(Attrition == "No"), hjust = -1.1, vjust = -1, color = "black") +
-  ggtitle("Business Travel grouped by Attrition") +
-  theme_minimal() +
-  theme(
-   # axis.text.x = element_text(angle=60, hjust=1),
-   axis.title.y = element_blank(),
-   axis.title.x = element_blank(),
-   strip.text = element_blank(),
-   )
+
+```{r}
+# Improved Business Travel by Attrition plot with adjusted text positioning
+busi <- wlb_vars |>
+  group_by(BusinessTravel, Attrition) |>
+  summarise(count = n(), .groups = 'drop') |>
+  # Calculate percentages within each travel category for better comparison
+  group_by(BusinessTravel) |>
+  mutate(
+    group_total = sum(count),
+    percentage = round(count / group_total * 100, 1)
+  ) |>
+  ungroup() |>
+  # Add a flag for highlighting the "Yes" attrition group
+  mutate(
+    highlight = Attrition == "Yes",
+    # Create more readable labels for BusinessTravel
+    TravelCategory = case_when(
+      BusinessTravel == "Non-Travel" ~ "No Travel",
+      BusinessTravel == "Travel_Rarely" ~ "Rare Travel",
+      BusinessTravel == "Travel_Frequently" ~ "Frequent Travel",
+      TRUE ~ as.character(BusinessTravel)
+    ),
+    # Create a factor with the correct order
+    TravelOrder = factor(TravelCategory, 
+                         levels = c("No Travel", "Rare Travel", "Frequent Travel"))
+  )
+
+busi_grob <- grobTree(richtext_grob(
+  "Employees who travel frequently<br>are more than twice as likely<br>to leave",
+  gp = gpar(fontsize = 10), hjust = 0, align_widths = TRUE, box_gp = gpar(col = GRAY, fill = WHITE, lwd = 2), padding = unit(c(4, 4, 2, 4), "pt")
+  ))
+
+
+
+# Create the improved plot with adjusted text positioning
+ggplot(busi, aes(x = TravelOrder, y = percentage, fill = Attrition)) +
+  geom_col(position = position_dodge(width = 0.7), width = 0.6) +
+  # Add data labels with increased vertical offset
+  geom_text(
+    aes(
+      label = paste0(percentage, "%"),
+      y = percentage + 5,  # Increased vertical offset
+      color = Attrition
+    ),
+    position = position_dodge(width = 0.7),
+    size = 3.5,
+    fontface = "bold"
+  ) +
+  annotation_custom(busi_grob, xmin = 0.2, ymin = -10) +
+  annotate("segment", x = 0.9, xend = 2.75, y = 18, yend = 35,
+       colour = SALMON, linetype = "dashed") +
+  # Set appropriate scales with more room at the top
+  scale_y_continuous(
+    limits = c(0, 100),
+    breaks = seq(0, 100, 20),
+    labels = function(x) paste0(x, "%"),
+    expand = expansion(mult = c(0, 0.1))  # Adjusted expansion
+  ) +
+  scale_fill_manual(
+    values = c("Yes" = SALMON, "No" = STEELBLUE),
+    labels = c("Yes" = "Left Company", "No" = "Stayed")
+  ) +
+  scale_color_manual(
+    values = c("Yes" = SALMON, "No" = STEELBLUE)
+  ) +
+  # Add meaningful labels
+  labs(
+    title = "Business Travel Significantly Increases Attrition Risk",
+    subtitle = "Percentage of employees who stay vs. leave by travel frequency",
+    x = NULL,
+    y = "Percentage of Employees",
+  ) +
+  # theme_story +
+  project_theme() +
+  guides(color = "none")  # Hide the color legend since it's redundant with fill
 
 ```
+
+
 
 #### Interpretation and Insights:  
 
@@ -175,20 +506,100 @@ This finding highlights a potential area for intervention: the company could exp
 
 ### Distance from home grouped by Attrition
 
-```{r}
 
-distance <- wlb_vars 
-  
-ggplot(distance, aes(x = DistanceFromHome, fill = Attrition)) +
-  geom_density() +
-  ggtitle("Distance From Home grouped by Attrition") +
-  theme_minimal() +
+```{r}
+# Improved Distance From Home plot with grobTree annotation
+distance_data <- wlb_vars
+
+# Calculate summary statistics for annotation
+distance_summary <- distance_data |>
+  group_by(Attrition) |>
+  summarise(
+    mean_distance = mean(DistanceFromHome, na.rm = TRUE),
+    median_distance = median(DistanceFromHome, na.rm = TRUE),
+    .groups = 'drop'
+  )
+
+
+# Get mean distances for annotation
+mean_yes <- sprintf("%.1f", distance_summary$mean_distance[distance_summary$Attrition == "Yes"])
+mean_no <- sprintf("%.1f", distance_summary$mean_distance[distance_summary$Attrition == "No"])
+
+# Create a grobTree for the annotation using paste0() for string concatenation
+distance_grob <- grobTree(richtext_grob(
+  paste0("<span style='font-size:9pt;font-weight:bold'>Mean distance: <span style='color:#D62728;font-weight:bold;'>",
+         mean_yes, 
+         "</span> vs. <span style='color:#1F77B4;font-weight:bold;'>",
+         mean_no,
+         "</span> miles</span>"),
+  gp = gpar(fontsize = 11), 
+  hjust = 0, 
+  align_widths = TRUE, 
+  box_gp = gpar(col = "#CCCCCC", fill = "#FFFFFF", lwd = 1),
+  padding = unit(c(8, 8, 6, 8), "pt"),
+  r = unit(4, "pt")
+))
+
+# Create the improved density plot
+ggplot(distance_data, aes(x = DistanceFromHome, fill = Attrition)) +
+  # Add histogram in background for context
+  geom_histogram(aes(y = ..density..), 
+                alpha = 0.3, 
+                position = "identity",
+                bins = 30) +
+  # Add smoothed density curves
+  geom_density(alpha = 0.7) +
+  # Add vertical lines for mean distances
+  geom_vline(data = distance_summary,
+             aes(xintercept = mean_distance, color = Attrition),
+             linetype = "dashed",
+             size = 1) +
+  annotation_custom(
+    distance_grob, 
+    xmin = -10,
+    ymin = 0.05
+  ) +
+  # Add a rectangle to highlight the long-distance area
+  annotate(
+    "rect",
+    xmin = 15,
+    xmax = max(distance_data$DistanceFromHome, na.rm = TRUE),
+    ymin = 0,
+    ymax = 0.04,
+    alpha = 0.2,
+    fill = SALMON
+  ) +
+  # Set appropriate scales
+  scale_x_continuous(
+    breaks = seq(0, max(distance_data$DistanceFromHome, na.rm = TRUE), by = 5),
+    expand = expansion(mult = c(0, 0.15))
+  ) +
+  scale_y_continuous(
+    labels = scales::percent_format(accuracy = 1),
+    expand = expansion(mult = c(0, 0.2))
+  ) +
+  scale_fill_manual(
+    values = c("Yes" = SALMON, "No" = STEELBLUE),
+    labels = c("Yes" = "Left Company", "No" = "Stayed")
+  ) +
+  scale_color_manual(
+    values = c("Yes" = SALMON, "No" = STEELBLUE)
+  ) +
+  # Add meaningful labels
+  labs(
+    title = "Commute Distance Impacts Employee Retention",
+    subtitle = "Employees who leave tend to have longer commutes",
+    x = "Distance From Home (miles)",
+    y = "Density",
+  ) +
+  project_theme() +
   theme(
-   # axis.text.x = element_text(angle=60, hjust=1),
-   axis.title.y = element_blank(),
-   strip.text = element_blank(),
-   )
+    legend.frame = element_rect(color = WHITE),
+    legend.background = element_rect(color = WHITE)
+  ) +
+  guides(color = "none")  # Hide the color legend since it's redundant with fill
 ```
+
 
 #### Interpretation and Insights:  
 
@@ -200,29 +611,103 @@ This finding could inform decisions about remote work policies, flexible work ar
 ---
 
 
-#### Overtime grouped by Attrition
+### Overtime grouped by Attrition
+
 
 ```{r}
+# Improved Overtime by Attrition plot following storytelling with data principles
+overtime_data <- wlb_vars |>
+  group_by(OverTime, Attrition) |>
+  summarise(count = n(), .groups = 'drop') |>
+  # Calculate percentages within each overtime category
+  group_by(OverTime) |>
+  mutate(
+    group_total = sum(count),
+    percentage = round(count / group_total * 100, 1)
+  ) |>
+  ungroup() |>
+  # Calculate total counts for annotation
+  mutate(
+    total_label = paste0("n=", group_total)
+  )
 
-overtime <- wlb_vars |> 
-  group_by(OverTime, Attrition) |> 
-  summarise(count = n()) |> 
-  mutate(percent = round(prop.table(count) * 100)) # to calculate proportions for each group
-  
-ggplot(overtime, aes(x = OverTime, y = count, fill = Attrition)) +
-  geom_col(position = "dodge") +
-  lims(y = c(0, 1000)) +
-  geom_text(aes(label = paste0(percent, "%"), parse = TRUE), data = overtime |> filter(Attrition == "Yes"), hjust = 2.2, vjust = -1) +
-  geom_text(aes(label = paste0(percent, "%"), parse = TRUE), data = overtime |> filter(Attrition == "No"), hjust = -1.5, vjust = -1, color = "black") +
-  ggtitle("Overtime Hours grouped by Attrition") +
-  theme_minimal() +
-  theme(
-   axis.text.x = element_text(angle=60, hjust=1),
-   axis.title.y = element_blank(),
-   strip.text = element_blank(),
-   )
+# Calculate the difference in attrition percentages for annotation
+yes_no <- overtime_data |>
+  select(OverTime, Attrition, percentage) |>
+  pivot_wider(names_from = Attrition, values_from = percentage) |>
+  mutate(difference = Yes - No)
 
+
+# Create a grobTree for the annotation
+overtime_grob <- grobTree(richtext_grob(
+  paste0("Employees who work overtime <br>are <span style='color:#D62728;font-weight:bold;'>",
+         round(yes_no$Yes[yes_no$OverTime == "Yes"] / yes_no$Yes[yes_no$OverTime == "No"], 1),
+         "x</span> more likely to leave"),
+  gp = gpar(fontsize = 11), 
+  hjust = 0, 
+  align_widths = TRUE, 
+  box_gp = gpar(col = "#CCCCCC", fill = "#FFFFFF", lwd = 1),
+  padding = unit(c(8, 8, 6, 8), "pt"),
+  r = unit(4, "pt")
+))
+
+# Create the improved plot
+ggplot(overtime_data, aes(x = OverTime, y = percentage, fill = Attrition)) +
+  # Add columns with improved spacing
+  geom_col(position = position_dodge(width = 0.7), width = 0.6) +
+  # Add percentage labels
+  geom_text(
+    aes(
+      label = paste0(percentage, "%"),
+      y = percentage + 3,  # Position above the bar
+      color = Attrition
+    ),
+    position = position_dodge(width = 0.7),
+    size = 3.5,
+    fontface = "bold"
+  ) +
+  # Add the grobTree annotation
+  annotation_custom(
+    overtime_grob, 
+    xmin = 0.2, 
+    ymin = 70,
+  ) +
+  # Add a connector arrow to highlight the key difference
+  annotate(
+    "segment",
+    x = 1.5,
+    xend = 1.7,
+    y = 78,
+    yend = 40,
+    arrow = arrow(length = unit(0.3, "cm")),
+    color = SALMON,
+    size = 0.8
+  ) +
+  # Set appropriate scales
+  scale_y_continuous(
+    limits = c(-5, 100),  # Extended below 0 for total count labels
+    breaks = seq(0, 100, 20),
+    labels = function(x) ifelse(x < 0, "", paste0(x, "%")),
+    expand = expansion(mult = c(0, 0.1))
+  ) +
+  scale_fill_manual(
+    values = c("Yes" = SALMON, "No" = STEELBLUE),
+    labels = c("Yes" = "Left Company", "No" = "Stayed")
+  ) +
+  scale_color_manual(
+    values = c("Yes" = SALMON, "No" = STEELBLUE)
+  ) +
+  # Add meaningful labels
+  labs(
+    title = "Overtime Significantly Increases Attrition Risk",
+    subtitle = "Percentage of employees who stay vs. leave by overtime status",
+    # x = NULL,
+    y = "Percentage of Employees",
+  ) +
+  project_theme() +
+  guides(color = "none")  # Hide the color legend since it's redundant with fill
 ```
+
 
 #### Interpretation and Insights:  
 
@@ -236,27 +721,116 @@ This is a critical area for HR to address. Possible interventions could include 
 
 ### Work-life Balance Survey grouped by Attrition
 
-```{r}
 
-wlb <- wlb_vars |> 
-  mutate(WorkLifeBalance = as_factor(WorkLifeBalance)) |> 
+```{r}
+# Improved Work-Life Balance by Attrition plot following storytelling with data principles
+wlb_data <- wlb_vars |>
+  mutate(
+    # Convert to factor and add meaningful labels
+    WorkLifeBalance = factor(WorkLifeBalance, 
+                            levels = 1:4, 
+                            labels = c("Poor", "Fair", "Good", "Excellent"))
+  ) |>
   group_by(WorkLifeBalance, Attrition) |>
-  summarise(count = n()) |> 
-  mutate(percent = round(prop.table(count) * 100)) # to calculate proportions for each group
-  
-ggplot(wlb, aes(x = WorkLifeBalance, y = count, fill = Attrition)) +
-  geom_col(position = "dodge") +
-  lims(y = c(0, 800)) +
-  geom_text(aes(label = paste0(percent, "%"), parse = TRUE), data = wlb |> filter(Attrition == "Yes"), hjust = 1.4, vjust = -1) +
-  geom_text(aes(label = paste0(percent, "%"), parse = TRUE), data = wlb |> filter(Attrition == "No"), hjust = -.8, vjust = -1, color = "black") +
-  ggtitle("Work-Life Balance survey grouped by Attrition") +
-  theme_minimal() +
-  theme(
-   axis.text.x = element_text(angle=60, hjust=1),
-   axis.title.y = element_blank(),
-   strip.text = element_blank(),
-   )
+  summarise(count = n(), .groups = 'drop') |>
+  # Calculate percentages within each work-life balance category
+  group_by(WorkLifeBalance) |>
+  mutate(
+    group_total = sum(count),
+    percentage = round(count / group_total * 100, 1)
+  ) |>
+  ungroup() |>
+  # Calculate total counts for annotation
+  mutate(
+    total_label = paste0("n=", group_total)
+  )
+
+# Calculate attrition percentages for trend analysis
+attrition_trend <- wlb_data |>
+  filter(Attrition == "Yes") |>
+  select(WorkLifeBalance, percentage, Attrition)
+
+
+
+# Create a grobTree for the annotation
+wlb_grob <- grobTree(richtext_grob(
+  paste0("Employees reporting poor balance<br> are <span style='color:#D62728;font-weight:bold;'>",
+         round(attrition_trend$percentage[attrition_trend$WorkLifeBalance == "Poor"] / 
+              mean(attrition_trend$percentage[attrition_trend$WorkLifeBalance %in% c("Good", "Excellent")]), 1),
+         "x</span> more likely to leave than<br> those with good/excellent balance"),
+  gp = gpar(fontsize = 10), 
+  hjust = 0, 
+  align_widths = TRUE, 
+  box_gp = gpar(col = "#CCCCCC", fill = "#FFFFFF", lwd = 1),
+  padding = unit(c(8, 8, 6, 8), "pt"),
+  r = unit(4, "pt")
+))
+
+# Create the improved plot
+ggplot(wlb_data, aes(x = WorkLifeBalance, y = percentage, fill = Attrition)) +
+  # Add columns with improved spacing
+  geom_col(position = position_dodge(width = 0.7), width = 0.6) +
+  # Add percentage labels
+  geom_text(
+    aes(
+      label = paste0(percentage, "%"),
+      y = percentage + 3,  # Position above the bar
+      color = Attrition
+    ),
+    position = position_dodge(width = 0.7),
+    size = 3.5,
+    fontface = "bold"
+  ) +
+  # Add a trend line for "Yes" attrition
+  geom_line(
+    data = attrition_trend,
+    aes(x = as.numeric(WorkLifeBalance), y = percentage + 7.5, group = 1),
+    color = SALMON,
+    linetype = "dashed",
+    size = 0.8
+  ) +
+  # Add the grobTree annotation
+  annotation_custom(
+    wlb_grob, 
+    xmin = -0.4, 
+    ymin = 15,
+  ) +
+  # Add a connector arrow to highlight the key difference
+  annotate(
+    "segment",
+    x = 2,
+    xend = 1.15,
+    y = 60,
+    yend = attrition_trend$percentage[attrition_trend$WorkLifeBalance == "Poor"] + 5,
+    arrow = arrow(length = unit(0.3, "cm")),
+    color = SALMON,
+    size = 0.8
+  ) +
+  # Set appropriate scales
+  scale_y_continuous(
+    limits = c(-5, 100),  # Extended below 0 for total count labels
+    breaks = seq(0, 100, 20),
+    labels = function(x) ifelse(x < 0, "", paste0(x, "%")),
+    expand = expansion(mult = c(0, 0.1))
+  ) +
+  scale_fill_manual(
+    values = c("Yes" = SALMON, "No" = STEELBLUE),
+    labels = c("Yes" = "Left Company", "No" = "Stayed")
+  ) +
+  scale_color_manual(
+    values = c("Yes" = SALMON, "No" = STEELBLUE)
+  ) +
+  # Add meaningful labels
+  labs(
+    title = "Poor Work-Life Balance Increases Attrition Risk",
+    subtitle = "Employees with poor work-life balance are much more likely to leave",
+    x = "Work-Life Balance Rating",
+    y = "Percentage of Employees",
+  ) +
+  project_theme() +
+  guides(color = "none")  # Hide the color legend since it's redundant with fill
 ```
+
 
 #### Interpretation and Insights:  
 
@@ -268,41 +842,275 @@ This reinforces the importance of perceived work-life balance as a key factor in
 ---
 
 
-## Regression
+## Predicting Employee Attrition: The Impact of Work-Life Balance Factors
 
-### Modeling Attrition: Quantifying the Impact of Work-Life Balance
+### Building a Predictive Model 
 
-Based on my exploratory analysis, which highlighted potential relationships between work-life balance factors and attrition, I now build a logistic regression model. This model allows me to quantify the impact of these factors on the *probability* of an employee leaving the company, while controlling for other variables. I specifically focus on WorkLifeBalance, BusinessTravel, DistanceFromHome, and OverTime, as these variables showed the strongest visual associations with attrition in my earlier analysis.
+After identifying potential relationships between work-life balance factors and employee attrition through exploratory analysis, I built a Random Forest Classifier (RFC) model to quantify these relationships. I elected to use a RFC due to its strength in handling both categorical and numerical data. I evaluated the model using accuracy, precision, recall, F1-score, and ROC-AUC.
+
+```{r}
+# logistic_reg() |> fit(Attrition ~ WorkLifeBalance + BusinessTravel + DistanceFromHome + OverTime, data=wlb_vars)
+
+model_data <- data |> 
+  mutate(Attrition = factor(Attrition, levels = c("Yes", "No")))
+
+# Split data into training and testing sets (70% training, 30% testing)
+set.seed(123)
+data_split <- initial_split(data = model_data, prop = 0.7, strata = Attrition)
+train_data <- training(data_split)
+test_data <- testing(data_split)
+
+# Define data preprocessing recipe
+data_recipe <- recipe(Attrition ~ ., data = train_data) |>
+  update_role(EmployeeNumber, EmployeeCount, Over18, StandardHours, new_role = "ID") |> # remove irrelevant columns
+  step_rm(has_role("ID")) |> # remove ID columns
+  step_dummy(all_nominal_predictors()) |> # encode categorical variables
+  step_normalize(all_numeric_predictors()) |> # standardize numeric predictors
+  step_zv(all_predictors()) # remove zero variance predictors if any
+
+# Define Random Forest model specification
+rf_model <- rand_forest(mode = "classification", trees = 500) |>
+  set_engine("ranger", importance = "impurity")
+
+# Create workflow
+rf_workflow <- workflow() |>
+  add_recipe(data_recipe) |>
+  add_model(rf_model)
+
+# Train the Random Forest model
+rf_fit <- rf_workflow |> fit(data = train_data)
+
+# Evaluate model performance on test data
+predictions <- predict(rf_fit, test_data, type = "prob") |>
+  bind_cols(predict(rf_fit, test_data)) |>
+  bind_cols(test_data |> select(Attrition))
+
+# Metrics evaluation
+metrics <- predictions |>
+  metrics(truth = Attrition, estimate = .pred_class)
+
+roc_auc <- predictions |>
+  roc_auc(truth = Attrition, .pred_Yes)
+
+conf_matrix <- predictions |>
+  conf_mat(truth = Attrition, estimate = .pred_class)
+
+# Output performance metrics
+metrics
+roc_auc
+conf_matrix
+
+# Feature importance
+rf_fit |> 
+  extract_fit_parsnip() |> 
+  vip::vip(num_features = 10)
+```
+
+
+
+
 
 
 ```{r}
-# Fit a logistic regression model using WorkLifeBalance, BusinessTravel, DistanceFromHome, and OverTime as predictors
-logistic_model <- glm(Attrition_binary ~ WorkLifeBalance + BusinessTravel + DistanceFromHome + OverTime, data=wlb_vars, family="binomial")
+# Improved model evaluation with better tables and visualizations
 
-# Display the summary of the fitted logistic regression model
-summary(logistic_model)
+# # Load required packages for enhanced visualizations
+# library(kableExtra)
+# library(ggplot2)
+# library(patchwork)
+# library(tidymodels)
+# library(vip)
+# library(scales)
+# library(forcats)
+
+# Prepare data
+model_data <- data |>
+  mutate(Attrition = factor(Attrition, levels = c("Yes", "No")))
+
+# Split data into training and testing sets (70% training, 30% testing)
+set.seed(123)
+data_split <- initial_split(data = model_data, prop = 0.7, strata = Attrition)
+train_data <- training(data_split)
+test_data <- testing(data_split)
+
+# Define data preprocessing recipe
+data_recipe <- recipe(Attrition ~ ., data = train_data) |>
+  update_role(EmployeeNumber, EmployeeCount, Over18, StandardHours, new_role = "ID") |> 
+  step_rm(has_role("ID")) |> 
+  step_dummy(all_nominal_predictors()) |> 
+  step_normalize(all_numeric_predictors()) |> 
+  step_zv(all_predictors())
+
+# Define Random Forest model specification
+rf_model <- rand_forest(mode = "classification", trees = 500) |>
+  set_engine("ranger", importance = "impurity")
+
+# Create workflow
+rf_workflow <- workflow() |>
+  add_recipe(data_recipe) |>
+  add_model(rf_model)
+
+# Train the Random Forest model
+rf_fit <- rf_workflow |> fit(data = train_data)
+
+# Evaluate model performance on test data
+predictions <- predict(rf_fit, test_data, type = "prob") |>
+  bind_cols(predict(rf_fit, test_data)) |>
+  bind_cols(test_data |> select(Attrition))
+
+# Calculate various performance metrics
+accuracy <- predictions |> metrics(truth = Attrition, estimate = .pred_class) |>
+  filter(.metric == "accuracy") |> pull(.estimate)
+
+precision <- predictions |> 
+  precision(truth = Attrition, estimate = .pred_class) |>
+  pull(.estimate)
+
+recall <- predictions |> 
+  recall(truth = Attrition, estimate = .pred_class) |>
+  pull(.estimate)
+
+f1 <- predictions |> 
+  f_meas(truth = Attrition, estimate = .pred_class) |>
+  pull(.estimate)
+
+roc_auc_val <- predictions |>
+  roc_auc(truth = Attrition, .pred_Yes) |>
+  pull(.estimate)
+
+# Create confusion matrix
+conf_matrix <- predictions |>
+  conf_mat(truth = Attrition, estimate = .pred_class)
+
+
 ```
 
-#### Interpretation and Insights
 
-The logistic regression model confirms my visual observations and provides quantifiable insights:
+### Model Performance
 
-- WorkLifeBalance (-0.24): A better work-life balance is associated with a lower probability of attrition.
-This coefficient suggests that interventions aimed at improving work-life balance (e.g., flexible work, wellness programs) could have a measurable impact on reducing attrition.
+My random forest classifier demonstrates strong predictive capability for employee attrition, achieving an accuracy of 85.1%.
 
-- BusinessTravel: 
-  - Travel Rarely (0.68): Employees who travel rarely are more likely to leave compared to those who don't travel at all.  
-  - Travel Frequently (1.33): Employees who travel frequently are even more likely to leave than those who travel rarely.
-The significant positive coefficients for both "Travel Rarely" and "Travel Frequently" (compared to "Non-Travel") highlight the importance of addressing the challenges associated with business travel. The company should investigate the specific reasons why even rare travel is associated with higher attrition.
+```{r}
 
-- DistanceFromHome (0.03): For every additional unit (like mile or kilometer) further away from home an employee lives, the likelihood of leaving increases slightly.
-Even a small increase in the coefficient for distance suggests that, all else being equal, employees with longer commutes are slightly more likely to leave. This reinforces the potential value of remote work options or relocation assistance.
+# Create a metrics table
+metrics_table <- tibble(
+  Metric = c("Accuracy", "Precision", "ROC AUC"),
+  Value = c(accuracy, precision, roc_auc_val),
+  Description = c(
+    "Proportion of correct predictions",
+    "Proportion of predicted attrition cases that were actual attrition",
+    "Area under the ROC curve (model's ability to distinguish classes)"
+  )
+) |>
+  mutate(
+    Value = round(Value, 3),
+    Performance = case_when(
+      Value >= 0.9 ~ "Excellent",
+      Value >= 0.8 ~ "Good",
+      Value >= 0.7 ~ "Fair",
+      Value >= 0.6 ~ "Poor",
+      TRUE ~ "Very Poor"
+    )
+  )
 
-- OverTime (1.32): Employees who have to work overtime are significantly more likely to leave the company.
-The large positive coefficient for OverTime provides strong statistical evidence that working overtime is a significant predictor of attrition. This highlights the urgency of addressing workload imbalances and promoting a culture that values work-life balance.
+# Create a styled kable table for metrics
+metrics_kable <- metrics_table |>
+  kbl(
+    caption = "Random Forest Model Performance Metrics",
+    col.names = c("Metric", "Value", "Description", "Performance Rating"),
+    align = c("l", "c", "l", "c")
+  ) |>
+  kable_classic(full_width = FALSE, html_font = "Cambria") |>
+  column_spec(1, bold = TRUE) |>
+  column_spec(2, color = "white", background = spec_color(metrics_table$Value, end = 0.7, option = "D")) |>
+  column_spec(4, color = "white", 
+             background = case_when(
+               metrics_table$Performance == "Excellent" ~ "#2c7bb6",
+               metrics_table$Performance == "Good" ~ "#abd9e9",
+               metrics_table$Performance == "Fair" ~ "#ffffbf",
+               metrics_table$Performance == "Poor" ~ "#fdae61",
+               TRUE ~ "#d7191c"
+             ))
 
-**Notably, these coefficients represent the independent effect of each factor, holding the other factors constant**. For example, even after accounting for distance from home and work-life balance, working overtime still significantly increases the likelihood of attrition.
+
+metrics_kable
+```
 
 
+ This means the model correctly identifies whether an employee will stay or leave approximately 85% of the time. The precision score of 80.0% indicates that when our model predicts an employee will leave, it is correct 80% of the time. Additionally, the ROC AUC score of 0.822 confirms the model's strong ability to distinguish between employees likely to stay versus those likely to leave. 
+
+These metrics collectively suggest I've developed a powerful predictive tool that can effectively identify at-risk employees before they depart, enabling proactive retention interventions. 
+
+
+### Key Drivers
+
+```{r}
+# Extract feature importance
+importance_data <- rf_fit |>
+  extract_fit_parsnip() |>
+  vip::vi() |>
+  mutate(
+    # Improve variable names for display
+    Variable = gsub("_", " ", Variable),
+    Variable = gsub("BusinessTravel", "Business Travel: ", Variable),
+    Variable = gsub("JobRole", "Job Role: ", Variable),
+    Variable = gsub("MaritalStatus", "Marital Status: ", Variable),
+    # Create categories for coloring
+    Category = case_when(
+      grepl("Over[tT]ime", Variable) ~ "Work-Life Balance",
+      grepl("Travel|Distance", Variable) ~ "Work-Life Balance",
+      grepl("WorkLife|Environment", Variable) ~ "Work-Life Balance",
+      grepl("Job|Role|Level", Variable) ~ "Job Characteristics",
+      grepl("Income|Stock|Rate", Variable) ~ "Compensation",
+      grepl("Age|Years", Variable) ~ "Demographics & Tenure",
+      grepl("Education|Training", Variable) ~ "Development",
+      grepl("Satisfaction|Involvement", Variable) ~ "Engagement",
+      grepl("Gender|Marital", Variable) ~ "Demographics & Tenure",
+      TRUE ~ "Other"
+    )
+  ) |>
+  # Take top 10 features
+  slice_max(order_by = Importance, n = 10)
+
+# Create an enhanced feature importance plot
+importance_plot <- ggplot(importance_data, 
+                         aes(x = fct_reorder(Variable, Importance), 
+                             y = Importance,
+                             fill = Category)) +
+  geom_col() +
+  geom_text(
+    aes(label = round(Importance, 3), 
+        hjust = -0.1),
+    size = 3.5
+  ) +
+  coord_flip() +
+  expand_limits(y=20) +
+  scale_fill_brewer(palette = "Set2")  +
+  project_theme() +
+  theme(
+    axis.title.y = element_blank()
+  )
+
+importance_plot
+```
+
+
+Compensation Factors
+
+- Monthly Income emerges as the single most important predictor, with an importance score of 17.8. This strongly suggests that compensation level is the primary consideration in employees' decisions to stay or leave.
+- Other compensation metrics also rank highly, with Daily Rate (10.7), Monthly Rate (9.2), and Hourly Rate (8.9) all appearing in the top 10 features. This consistent pattern across different compensation measures reinforces the critical role of fair and competitive pay in retention.
+
+
+Demographics & Tenure
+
+- Age is the second most important predictor (12.7), indicating that attrition risk varies significantly across different age groups.
+- Total Working Years (11.6) and Years at Company (10.2) also show strong influence, suggesting that career stage and tenure significantly affect retention.
+- Years with Current Manager (8.3) rounds out the top 10, highlighting the importance of management relationships in retention decisions.
+
+
+Work-Life Balance Factors 
+
+- Overtime ranks as the fourth most important predictor (11.3), confirming our earlier analysis that excessive work hours significantly impact attrition.
+- Distance From Home (9.6) appears as the seventh most important factor, validating that commute length plays a meaningful role in employees' decisions to stay or leave.
 
 
