@@ -9,3 +9,4 @@
 theme
 unused.R
 employee_attrition_files
+!theme/project_theme.R
