@@ -10,25 +10,24 @@ editor:
   render-on-save: true
 ---
 
-Employee attrition, the departure of employees from an organization, presents a significant and multifaceted challenge. High turnover rates can have far-reaching consequences, impacting not only financial performance but also organizational culture and long-term sustainability. These consequences include:
+Employee turnover (employees leaving a company) can cause serious challenges. High turnover affects a company's finances, culture, and long-term success. Here are some key problems it can create: 
 
-- **Loss of Institutional Knowledge:** The departure of long-tenured employees results in the loss of invaluable expertise, specialized skills, and deep understanding of organizational processes. This "brain drain" can hinder innovation and efficiency.
-- **Substantial Financial Costs:** The process of replacing employees is expensive. It encompasses recruitment advertising, interviewing, onboarding, and training new hires.  These costs are amplified when turnover is consistently high, diverting resources from other critical areas.
-- **Disrupted Performance and Morale:** High turnover disrupts team workflows, creating instability and uncertainty. Remaining employees may experience increased workloads, stress, and decreased morale, leading to lower productivity and engagement.
-- **Impaired Talent Acquisition:** A reputation for high employee turnover can significantly damage an organization's ability to attract and retain top talent.  Potential candidates may perceive the company as unstable or lacking in employee support and development opportunities.
-- **Negative Brand Reputation:** Beyond recruitment, high turnover can negatively impact an organization's overall image. Customers, partners, and the wider community may perceive the company as poorly managed or undesirable to work for.
+- **Loss of Valuable Knowledge:**
+When experienced employees leave, they take important knowledge, skills, and understanding of company processes with them. This loss can slow down innovation and reduce overall efficiency. 
+- **Higher Costs:**
+Hiring and training new employees is expensive. Costs like job advertising, interviewing, training, and onboarding quickly add up, especially if turnover is frequent. 
+- **Team Disruption and Lower Morale:**
+High turnover can disrupt team routines and create uncertainty. Employees who stay might feel overloaded, stressed, or unhappy, reducing overall productivity. 
+- **Difficulty Attracting New Talent:**
+Companies known for employee turnover struggle more to hire and keep good employees. Potential recruits may view the company as unstable or unsupportive. 
+- **Negative Company Image:**
+High employee turnover can harm a company's reputation. Customers, partners, and the public might see the business as poorly run or an undesirable workplace. 
 
 
 
 ## Identifying and Addressing High Turnover
 
-Analyzing organizational and employee data can provide a clear understanding of the contributing factors influencing turnover. Only then can I develop data-driven targeted recommendations and interventions to address them.
-
-I sought to investigate examine the potential link between work-life balance and an employee's decision to leave the company. I focus on the following key research question:
-
-- **Primary Question:** How do key work-life balance factors (business travel, overtime, distance from home, and self-reported work-life balance) influence the likelihood of employee attrition?
-
-I will begin with exploratory data analysis to visualize patterns and trends, and then I will build a statistical model to predict the likelihood of attrition based on these key factors.
+The goal of this analysis is to understand why employees leave the company. To do this, I'll explore data to uncover patterns, then build a model to predict who is more likely to leave based on these important factors.
 
 
 
@@ -50,7 +49,7 @@ suppressPackageStartupMessages({
 
 # Load the data
 data <- read.csv("data/attrition-dataset.csv")
-source("theme/my_theme.R")
+# source("theme/my_theme.R")
 source("theme/project_theme.R")
 
 ```
@@ -91,12 +90,13 @@ source("theme/project_theme.R")
 #   )
 ```
 
-## Initial Exploration: Understanding the Landscape of Attrition
+## Exploring Employee Attrition: the Big Picture 
 
-Before diving into specific factors, I begin by gaining a broad understanding of the dataset. 
+First, let's take a broad look at employee attrition across the company:   
 
 
-I first view the total company attrition rate
+### Overall Attrition Rate
+
 ```{r}
 # Total company attrition
 
@@ -126,13 +126,12 @@ ggplot(total_attrition, aes(x = Attrition, y = percentage, fill = Attrition)) +
 
 
 
-16% of employees left while 84% stayed.
+About 16% of employees left the organization, while 84% remained.
 
 
-
+### Attrition by Job Roles
 
 ```{r}
-# Improved Job Role Attrition visualization following storytelling with data principles
 
 # Calculate job role attrition metrics
 attrition_jobrole <- data |>
@@ -241,7 +240,7 @@ ggplot() +
       label = count
     ),
     size = 3,
-    color = "white"
+    color = WHITE
   ) +
   geom_text(
     data = attrition_yes, 
@@ -251,7 +250,7 @@ ggplot() +
       label = abs(count_neg)
     ),
     size = 3,
-    color = "white"
+    color = WHITE
   ) +
   # Add a reference line for the company average
   geom_hline(
@@ -281,10 +280,10 @@ ggplot() +
 
 
 
-I can see that the Laboratory Technician role had the highest number of employees leaving while the Research Director role had the fewest. 
+Some job roles have higher turnover than others. For example, the Laboratory Technician role experienced the highest absolute number of employees leaving. However, the Sales Representative role had the highest percent turnover at 66%. On the other hand, the Research Director role had the lowest turnover.
 
-However, the Sales Representative role had the highest turnover percentage at 66%.
 
+### Attrition by Department
 
 ```{r}
 # Attrition by Department 
@@ -302,7 +301,7 @@ department_colors <- c(
 )
 
 ggplot(attrition_dept, aes(x = 2, y = percentage, fill = Department)) +
-  geom_bar(stat = "identity", color = "white", linewidth = 0.2) +
+  geom_bar(stat = "identity", color = WHITE, linewidth = 0.2) +
   coord_polar(theta = "y", start = 0) +
   scale_fill_manual(values = department_colors) +
   geom_label_repel(aes(label = paste0(sprintf("%.1f", percentage), "%")),
@@ -354,49 +353,305 @@ ggplot(attrition_dept, aes(x = 2, y = percentage, fill = Department)) +
 
 
 
-By department, 56% of all attrition came from the Research & Development department while the least percent of all attrition (5%) came from the Human Resources department.
+Over half of all attrition (56%) came from the Research & Development department. The lowest proportion of attrition came from Human Resources (less than 5%).
 
 
-## Attrition by Job Role and Department
+
+
 
 ```{r}
-# Create a heatmap of attrition by job role and department
-heatmap_data <- data |>
-  mutate(Attrition_binary = if_else(Attrition == "Yes", 1, 0)) |> 
-  group_by(JobRole, Department) |>
-  summarise(
-    AttritionRate = mean(Attrition_binary) * 100,
-    EmployeeCount = n(),
-    .groups = 'drop'
-  )
-
-ggplot(heatmap_data, aes(x = JobRole, y = Department, fill = AttritionRate)) +
-  geom_tile(color = "white", size = 0.5) +
-  # geom_text(aes(label = sprintf("%.1f%%\n(n=%d)", AttritionRate, EmployeeCount)),
-  #           color = "black",
-  #           size = 3) +
-  geom_text(aes(label = sprintf("%.1f%%", AttritionRate, EmployeeCount)),
-            color = "black",
-            size = 3) +
-  scale_fill_gradient2(low = STEELBLUE, mid = "white", high = SALMON,
-                      midpoint = median(heatmap_data$AttritionRate),
-                      name = "Attrition Rate") +
-  project_theme() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1),
-        panel.grid = element_blank()) +
-  labs(title = "Attrition Rates by Job Role and Department",
-       subtitle = "Showing percentage and count of employees in each group")
+# # Attrition by Job Role and Department
+# # Create a heatmap of attrition by job role and department
+# heatmap_data <- data |>
+#   mutate(Attrition_binary = if_else(Attrition == "Yes", 1, 0)) |> 
+#   group_by(JobRole, Department) |>
+#   summarise(
+#     AttritionRate = mean(Attrition_binary) * 100,
+#     EmployeeCount = n(),
+#     .groups = 'drop'
+#   )
+# 
+# ggplot(heatmap_data, aes(x = JobRole, y = Department, fill = AttritionRate)) +
+#   geom_tile(color = WHITE, size = 0.5) +
+#   geom_text(aes(label = sprintf("%.1f%%", AttritionRate, EmployeeCount)),
+#             color = "black",
+#             size = 3) +
+#   scale_fill_gradient2(low = STEELBLUE, mid = WHITE, high = SALMON,
+#                       midpoint = median(heatmap_data$AttritionRate),
+#                       name = "Attrition Rate") +
+#   project_theme() +
+#   theme(axis.text.x = element_text(angle = 45, hjust = 1),
+#         panel.grid = element_blank()) +
+#   labs(title = "Attrition Rates by Job Role and Department",
+#        subtitle = "Showing percentage and count of employees in each group")
 ```
 
 
 
 
+## Factors that Influence Employee Turnover
 
-## Analyzing Work-Life Balance Variables: A Deeper Dive
+### Income and Employee Attrition 
 
-Having established the importance of work-life balance in my research question, I now examine specific variables related to this theme: Business Travel, Distance From Home, OverTime, and WorkLifeBalance. 
+```{r}
 
-I aim to understand how each of these factors relates to employee attrition, and whether these relationships support my initial hypotheses.
+# Calculate summary stats for annotation
+income_summary <- data |>
+  group_by(Attrition) |>
+  summarise(
+    mean_income = mean(MonthlyIncome, na.rm = TRUE),
+    median_income = median(MonthlyIncome, na.rm = TRUE),
+    count = n(),
+    .groups = 'drop'
+  ) |>
+  mutate(
+    income_diff = mean_income[Attrition == "No"] - mean_income[Attrition == "Yes"],
+    percent_diff = (income_diff / mean_income[Attrition == "Yes"]) * 100
+  )
+
+# Create a rich text annotation using grobTree
+income_grob <- grobTree(richtext_grob(
+  paste0(
+    "Employees who stay earn <span style='color:#1F77B4;font-weight:bold;'>$", 
+    format(round(income_summary$mean_income[income_summary$Attrition == "No"]), big.mark = ","), 
+    "</span> on average<br>",
+    "Employees who leave earn <span style='color:#D62728;font-weight:bold;'>$", 
+    format(round(income_summary$mean_income[income_summary$Attrition == "Yes"]), big.mark = ","), 
+    "</span> on average<br><br>",
+    "<span style='font-weight:bold;'>That's a ", 
+    round(income_summary$percent_diff[1]), 
+    "% difference</span>"
+  ),
+  # gp = gpar(fontsize = 12, fontfamily = "sans"),
+  gp = gpar(fontsize = 10),
+  x = unit(0.05, "npc"), y = unit(0.9, "npc"),
+  hjust = 0, vjust = 1,
+  box_gp = gpar(col = GRAY50, fill = WHITE, alpha = 0.5, lwd = 1),
+  padding = unit(c(10, 10, 10, 10), "pt"),
+  r = unit(4, "pt")
+))
+
+# Create the improved visualization
+ggplot(data, aes(x = Attrition, y = MonthlyIncome, fill = Attrition)) +
+  # Use violin plots to show distribution
+  geom_violin(alpha = 0.7, width = 0.8) +
+  # Add boxplots to show quartiles
+  geom_boxplot(width = 0.2, color = WHITE, alpha = 0.9) +
+  # Add mean income points
+  stat_summary(
+    fun = mean, 
+    geom = "point", 
+    shape = 23, 
+    size = 5, 
+    color = WHITE, 
+    fill = BLACK
+  ) +
+  # Add mean income labels
+  # stat_summary(
+  #   fun = mean,
+  #   geom = "text",
+  #   aes(label = paste0("$", format(round(..y..), big.mark = ","))),
+  #   vjust = -1.5,
+  #   size = 4,
+  #   fontface = "bold"
+  # ) +
+  # Add annotation
+  annotation_custom(income_grob) +
+  # Add an arrow annotation showing the difference
+  annotate(
+    "segment",
+    x = 1.1, xend = 1.9,
+    y = income_summary$mean_income[income_summary$Attrition == "Yes"] + 1000,
+    yend = income_summary$mean_income[income_summary$Attrition == "No"] - 1000,
+    arrow = arrow(length = unit(0.3, "cm"), ends = "both"),
+    color = BLACK,
+    # linetype = "dashed",
+    size = 0.6
+  ) +
+  annotate(
+    "text",
+    x = 1.5,
+    y = (income_summary$mean_income[income_summary$Attrition == "Yes"] + 
+         income_summary$mean_income[income_summary$Attrition == "No"]) / 2 + 1500,
+    label = paste0("$", format(round(income_summary$income_diff), big.mark = ","), "/month difference"),
+    color = BLACK,
+    fontface = "bold",
+    size = 3.4
+  ) +
+  # Set colors
+  scale_fill_manual(
+    values = c("Yes" = SALMON, "No" = STEELBLUE),
+    labels = c("Yes" = "Left Company", "No" = "Stayed")
+  ) +
+  # Format y-axis as currency
+  scale_y_continuous(
+    labels = dollar_format(),
+    breaks = seq(0, 20000, 5000),
+    expand = expansion(mult = c(0, 0.2))
+  ) +
+  # Improve labels
+  labs(
+    title = "Employees Who Leave Earn Substantially Less",
+    subtitle = "Monthly income distribution by attrition status",
+    x = NULL,
+    y = "Monthly Income",
+    caption = "Black diamonds indicate mean values"
+  ) +
+  # Apply clean theme
+  project_theme()
+```
+
+Employees who left generally earned significantly less money than those who stayed, suggesting salary is an important factor in attrition.
+
+
+
+
+### Age and Tenure (how long employees stay at the company) 
+
+
+```{r}
+
+# Calculate attrition rates by age and tenure groups for annotation
+attrition_tenure <- data |>
+  mutate(
+    # Create age groups
+    AgeGroup = cut(Age, 
+                  breaks = c(18, 30, 40, 50, 60), 
+                  labels = c("18-30", "31-40", "41-50", "51-60"),
+                  include.lowest = TRUE),
+    # Create tenure groups
+    TenureGroup = cut(YearsAtCompany,
+                     breaks = c(0, 2, 5, 10, 20, 40),
+                     labels = c("0-2", "3-5", "6-10", "11-20", "21+"),
+                     include.lowest = TRUE)
+  ) |>
+  group_by(AgeGroup, TenureGroup) |>
+  summarise(
+    TotalCount = n(),
+    AttritionCount = sum(Attrition == "Yes"),
+    AttritionRate = AttritionCount / TotalCount * 100,
+    .groups = 'drop'
+  )
+
+# Find the highest attrition rate group for annotation
+highest_attrition <- attrition_tenure |>
+  filter(!is.na(AgeGroup) & !is.na(TenureGroup)) |>
+  arrange(desc(AttritionRate)) |>
+  slice(1)
+
+# Find the lowest attrition rate group for annotation
+lowest_attrition <- attrition_tenure |>
+  filter(!is.na(AgeGroup) & !is.na(TenureGroup) & TotalCount >= 10) |>
+  arrange(AttritionRate) |>
+  slice(1)
+
+# Create a rich text annotation using grobTree
+attrition_grob <- grobTree(richtext_grob(
+  paste0(
+    "<span style='color:#D62728;font-weight:bold;'>Highest Risk:</span> ", 
+    highest_attrition$AgeGroup, " age group with ", 
+    highest_attrition$TenureGroup, " years<br>tenure ",
+    "<span style='font-weight:bold;'>", round(highest_attrition$AttritionRate), 
+    "% attrition rate</span><br><br>",
+    "<span style='color:#1F77B4;font-weight:bold;'>Lowest Risk:</span> ", 
+    lowest_attrition$AgeGroup, " age group with ", 
+    lowest_attrition$TenureGroup, " years<br>tenure ",
+    "<span style='font-weight:bold;'>", round(lowest_attrition$AttritionRate), 
+    "% attrition rate</span>"
+  ),
+  gp = gpar(fontsize = 9),
+  x = unit(0.05, "npc"), y = unit(0.95, "npc"),
+  hjust = 0, vjust = 1,
+  box_gp = gpar(col = GRAY50, fill = WHITE, alpha = 0.4, lwd = 1),
+  padding = unit(c(10, 10, 10, 10), "pt"),
+  r = unit(4, "pt")
+))
+
+# Create the visualization
+ggplot(data, aes(x = Age, y = YearsAtCompany)) +
+  # Add a 2D density hexbin layer
+  geom_hex(aes(fill = ..density..), bins = 15) +
+  # Add points colored by attrition
+  geom_point(
+    aes(color = Attrition, size = Attrition),
+    alpha = 0.7,
+    position = position_jitter(width = 0.5, height = 0.5, seed = 123)
+  ) +
+  # Add contour lines for attrition density
+  stat_density_2d(
+    data = data |> filter(Attrition == "Yes"),
+    aes(x = Age, y = YearsAtCompany),
+    color = RED,
+    alpha = 0.7,
+    linewidth = 0.7,
+    contour = TRUE
+  ) +
+  # Add annotation
+  annotation_custom(attrition_grob) +
+  # Highlight high-risk areas with improved visibility
+  annotate(
+    "rect",
+    xmin = 25, xmax = 35,
+    ymin = 0, ymax = 5,
+    fill = WHITE, alpha = 0.4,  # White background for contrast
+    color = RED, linewidth = 1.5, linetype = "dashed"
+  ) +
+  # Improved high-risk label with white background for visibility
+  annotate(
+    "label",
+    x = 30, y = 6,
+    label = "HIGH ATTRITION RISK ZONE",
+    color = WHITE,
+    fill = RED,
+    fontface = "bold",
+    size = 3.5,
+    label.padding = unit(0.5, "lines"),
+    label.r = unit(0.2, "lines")
+  ) +
+  # Set colors and sizes
+  viridis::scale_fill_viridis(
+    option = "plasma",
+    name = "Employee\nDensity"
+  ) +
+  scale_color_manual(
+    values = c("Yes" = RED, "No" = STEELBLUE),
+    labels = c("Yes" = "Left Company", "No" = "Stayed"),
+    name = "Attrition"
+  ) +
+  scale_size_manual(
+    values = c("Yes" = 3, "No" = 1.5),
+    guide = "none"
+  ) +
+  # Set axis scales
+  scale_x_continuous(
+    breaks = seq(20, 60, by = 5),
+    limits = c(18, 60)
+  ) +
+  scale_y_continuous(
+    breaks = seq(0, 40, by = 5),
+    limits = c(0, 40)
+  ) +
+  # Improve labels
+  labs(
+    title = "Younger Employees with Short Tenure Have Highest Attrition Risk",
+    subtitle = "Relationship between age, years at company, and attrition",
+    x = "Age",
+    y = "Years at Company",
+    caption = "Red contour lines show areas of high attrition density"
+  ) +
+  project_theme() +
+  theme(
+    plot.margin = margin(0.5, 0.2, 0.2, 0.5, "cm"),
+    plot.title = element_text(hjust = 0.2)
+  )
+```
+
+Younger employees with fewer years at the company have the highest attrition risk, while older employees with longer tenure are most likely to stay. The pattern is immediately visible through the concentration of red points and contour lines in the lower-left portion of the plot.
+
+
+### Taking a Closer Look at Work-Life Balance Factors 
+
+I explored work-life balance factors more closely by examining specific factors: Business Travel, Distance from Home, Overtime, and employee-rated Work-Life Balance.  
 
 
 ```{r}
@@ -406,9 +661,9 @@ wlb_vars <- data |>
 ```
 
 
-### Business Travel grouped by Attrition
 
 
+#### Frequency of Business Travel 
 
 
 ```{r}
@@ -491,20 +746,12 @@ ggplot(busi, aes(x = TravelOrder, y = percentage, fill = Attrition)) +
 
 
 
-#### Interpretation and Insights:  
-
-The plot reveals a clear association between business travel frequency and attrition: **Employees who travel frequently are significantly more likely to leave the company compared to those who travel rarely or not at all**. This suggests that the demands and potential stress associated with frequent travel may contribute to burnout and dissatisfaction, leading to higher turnover. 
-
-This finding highlights a potential area for intervention: the company could explore ways to reduce the burden of frequent travel. This could include:
-- Offering more flexible travel arrangements
-- Providing additional support to frequent travelers
-- Re-evaluating the necessity of certain trips
+There is a clear association between business travel frequency and attrition: **Employees who travel frequently are significantly more likely to leave the company compared to those who travel rarely or not at all**. This suggests that the potential stress associated with frequent travel may contribute to burnout and dissatisfaction, leading to higher turnover. 
 
 
----
 
 
-### Distance from home grouped by Attrition
+#### Distance from Home (Commute distance) 
 
 
 ```{r}
@@ -601,21 +848,17 @@ ggplot(distance_data, aes(x = DistanceFromHome, fill = Attrition)) +
 ```
 
 
-#### Interpretation and Insights:  
 
 The density plot indicates a higher concentration of former employees (Attrition = Yes) living further from the office. While not a definitive causal relationship, this suggests that longer commutes may contribute to attrition. This could be due to increased stress, reduced work-life balance, or a weaker connection to the company culture. 
 
-This finding could inform decisions about remote work policies, flexible work arrangements, or even the provision of transportation assistance. It's important to note the overlap in distributions; many employees with longer commutes do stay, indicating other factors are also at play. 
 
 
----
 
 
-### Overtime grouped by Attrition
+#### Working Overtime 
 
 
 ```{r}
-# Improved Overtime by Attrition plot following storytelling with data principles
 overtime_data <- wlb_vars |>
   group_by(OverTime, Attrition) |>
   summarise(count = n(), .groups = 'drop') |>
@@ -709,17 +952,14 @@ ggplot(overtime_data, aes(x = OverTime, y = percentage, fill = Attrition)) +
 ```
 
 
-#### Interpretation and Insights:  
 
-The bar plot clearly shows that employees who work overtime are considerably more likely to leave the company. This strongly suggests that excessive work hours contribute to attrition, potentially due to burnout, reduced work-life balance, and increased stress. 
-
-This is a critical area for HR to address. Possible interventions could include workload management strategies, stricter overtime policies, or increased staffing levels. 
+We can clearly see that employees who work overtime are considerably more likely to leave the company. This strongly suggests that excessive work hours contribute to attrition, potentially due to burnout, reduced work-life balance, and increased stress. 
 
 
----
 
 
-### Work-life Balance Survey grouped by Attrition
+
+#### Self-Reported Work-life Balance Survey
 
 
 ```{r}
@@ -834,96 +1074,22 @@ ggplot(wlb_data, aes(x = WorkLifeBalance, y = percentage, fill = Attrition)) +
 
 #### Interpretation and Insights:  
 
-The plot shows a notable difference in attrition rates based on employee-reported work-life balance scores. Employees who rated their work-life balance as "1" (presumably the lowest rating) were significantly more likely to leave. While those with ratings of "2," "3," and "4" also show attrition, the rate is much lower. 
+We can see notable difference in attrition rates based on employee-reported work-life balance scores. Employees who rated their work-life balance as "1" (presumably the lowest rating) were significantly more likely to leave. While those with ratings of "2," "3," and "4" also show attrition, the rate is much lower. 
 
-This reinforces the importance of perceived work-life balance as a key factor in employee retention. The company should prioritize initiatives that promote a healthy work-life balance, such as flexible work arrangements, wellness programs, and clear expectations regarding working hours. It's crucial to understand why some employees report such low work-life balance scores. 
-
-
----
 
 
 ## Predicting Employee Attrition: The Impact of Work-Life Balance Factors
 
 ### Building a Predictive Model 
 
-After identifying potential relationships between work-life balance factors and employee attrition through exploratory analysis, I built a Random Forest Classifier (RFC) model to quantify these relationships. I elected to use a RFC due to its strength in handling both categorical and numerical data. I evaluated the model using accuracy, precision, recall, F1-score, and ROC-AUC.
-
-```{r}
-# logistic_reg() |> fit(Attrition ~ WorkLifeBalance + BusinessTravel + DistanceFromHome + OverTime, data=wlb_vars)
-
-model_data <- data |> 
-  mutate(Attrition = factor(Attrition, levels = c("Yes", "No")))
-
-# Split data into training and testing sets (70% training, 30% testing)
-set.seed(123)
-data_split <- initial_split(data = model_data, prop = 0.7, strata = Attrition)
-train_data <- training(data_split)
-test_data <- testing(data_split)
-
-# Define data preprocessing recipe
-data_recipe <- recipe(Attrition ~ ., data = train_data) |>
-  update_role(EmployeeNumber, EmployeeCount, Over18, StandardHours, new_role = "ID") |> # remove irrelevant columns
-  step_rm(has_role("ID")) |> # remove ID columns
-  step_dummy(all_nominal_predictors()) |> # encode categorical variables
-  step_normalize(all_numeric_predictors()) |> # standardize numeric predictors
-  step_zv(all_predictors()) # remove zero variance predictors if any
-
-# Define Random Forest model specification
-rf_model <- rand_forest(mode = "classification", trees = 500) |>
-  set_engine("ranger", importance = "impurity")
-
-# Create workflow
-rf_workflow <- workflow() |>
-  add_recipe(data_recipe) |>
-  add_model(rf_model)
-
-# Train the Random Forest model
-rf_fit <- rf_workflow |> fit(data = train_data)
-
-# Evaluate model performance on test data
-predictions <- predict(rf_fit, test_data, type = "prob") |>
-  bind_cols(predict(rf_fit, test_data)) |>
-  bind_cols(test_data |> select(Attrition))
-
-# Metrics evaluation
-metrics <- predictions |>
-  metrics(truth = Attrition, estimate = .pred_class)
-
-roc_auc <- predictions |>
-  roc_auc(truth = Attrition, .pred_Yes)
-
-conf_matrix <- predictions |>
-  conf_mat(truth = Attrition, estimate = .pred_class)
-
-# Output performance metrics
-metrics
-roc_auc
-conf_matrix
-
-# Feature importance
-rf_fit |> 
-  extract_fit_parsnip() |> 
-  vip::vip(num_features = 10)
-```
-
+After exploring factors related to employee turnover, I built a "Random Forest" predictive model. This model can predict how likely an employee is to leave based on multiple factors. Random forests work well with diverse types of data and provide reliable predictions. I evaluated the model by measuring accuracy, precision, recall, and ROC-AUC.
 
 
 
 
 
 ```{r}
-# Improved model evaluation with better tables and visualizations
 
-# # Load required packages for enhanced visualizations
-# library(kableExtra)
-# library(ggplot2)
-# library(patchwork)
-# library(tidymodels)
-# library(vip)
-# library(scales)
-# library(forcats)
-
-# Prepare data
 model_data <- data |>
   mutate(Attrition = factor(Attrition, levels = c("Yes", "No")))
 
@@ -988,7 +1154,7 @@ conf_matrix <- predictions |>
 
 ### Model Performance
 
-My random forest classifier demonstrates strong predictive capability for employee attrition, achieving an accuracy of 85.1%.
+The model accurately predicted whether an employee stayed or left approximately 85% of the time.
 
 ```{r}
 
@@ -1011,35 +1177,24 @@ metrics_table <- tibble(
       Value >= 0.6 ~ "Poor",
       TRUE ~ "Very Poor"
     )
-  )
-
-# Create a styled kable table for metrics
-metrics_kable <- metrics_table |>
+  ) |> 
   kbl(
     caption = "Random Forest Model Performance Metrics",
     col.names = c("Metric", "Value", "Description", "Performance Rating"),
     align = c("l", "c", "l", "c")
-  ) |>
-  kable_classic(full_width = FALSE, html_font = "Cambria") |>
-  column_spec(1, bold = TRUE) |>
-  column_spec(2, color = "white", background = spec_color(metrics_table$Value, end = 0.7, option = "D")) |>
-  column_spec(4, color = "white", 
-             background = case_when(
-               metrics_table$Performance == "Excellent" ~ "#2c7bb6",
-               metrics_table$Performance == "Good" ~ "#abd9e9",
-               metrics_table$Performance == "Fair" ~ "#ffffbf",
-               metrics_table$Performance == "Poor" ~ "#fdae61",
-               TRUE ~ "#d7191c"
-             ))
+  ) |> 
+  kable_classic() |> 
+  column_spec(1, bold = TRUE)
 
 
-metrics_kable
+
+metrics_table
 ```
 
 
- This means the model correctly identifies whether an employee will stay or leave approximately 85% of the time. The precision score of 80.0% indicates that when our model predicts an employee will leave, it is correct 80% of the time. Additionally, the ROC AUC score of 0.822 confirms the model's strong ability to distinguish between employees likely to stay versus those likely to leave. 
+Additionally, when the model predicts an employee will leave, it is correct 80% of the time.
 
-These metrics collectively suggest I've developed a powerful predictive tool that can effectively identify at-risk employees before they depart, enabling proactive retention interventions. 
+These metrics collectively suggest I've developed a strong predictive tool that can effectively identify at-risk employees before they depart, allowing the company to proactively address significant issues to retain key employees.
 
 
 ### Key Drivers
@@ -1085,32 +1240,38 @@ importance_plot <- ggplot(importance_data,
   ) +
   coord_flip() +
   expand_limits(y=20) +
-  scale_fill_brewer(palette = "Set2")  +
+  # scale_fill_brewer(palette = "Set2")  +
   project_theme() +
   theme(
     axis.title.y = element_blank()
+  ) +
+  scale_fill_manual(
+    values = c("Compensation" = TEAL, "Demographics & Tenure" = SALMON, "Work-Life Balance" = STEELBLUE),
+    # labels = c("Yes" = "Left Company", "No" = "Stayed")
   )
 
 importance_plot
 ```
 
 
-Compensation Factors
+**Compensation (Pay & Salary):**
 
-- Monthly Income emerges as the single most important predictor, with an importance score of 17.8. This strongly suggests that compensation level is the primary consideration in employees' decisions to stay or leave.
-- Other compensation metrics also rank highly, with Daily Rate (10.7), Monthly Rate (9.2), and Hourly Rate (8.9) all appearing in the top 10 features. This consistent pattern across different compensation measures reinforces the critical role of fair and competitive pay in retention.
-
-
-Demographics & Tenure
-
-- Age is the second most important predictor (12.7), indicating that attrition risk varies significantly across different age groups.
-- Total Working Years (11.6) and Years at Company (10.2) also show strong influence, suggesting that career stage and tenure significantly affect retention.
-- Years with Current Manager (8.3) rounds out the top 10, highlighting the importance of management relationships in retention decisions.
+- Monthly Income was the strongest predictor, clearly telling us that salary matters greatly for retention.  
+- Other related payment factors (Daily Rate, Monthly Rate, and Hourly Rate) were also among the top predictors. Employees care deeply about being fairly compensated.
 
 
-Work-Life Balance Factors 
+**Employee Age and Tenure:**
 
-- Overtime ranks as the fourth most important predictor (11.3), confirming our earlier analysis that excessive work hours significantly impact attrition.
-- Distance From Home (9.6) appears as the seventh most important factor, validating that commute length plays a meaningful role in employees' decisions to stay or leave.
+- Age matters significantly, with younger workers more likely to leave compared to older, settled employees.  
+- Total Working Years and Years spent at the Company indicate that longer-term employees are less likely to quit. Employees early in their careers or tenure are more vulnerable.  
+- Years with Current Manager also highlights how management quality and work relationships strongly influence whether employees stay or leave.
 
 
+**Work-life Balance:**
+
+- Overtime was a critical predictor, confirming our earlier finding that working too many hours pushes employees away from the company.  
+- Distance from Home matters—longer commutes can negatively affect whether employees stay or leave.
+
+---
+
+Taken together, these clearly identified factors and insights provide actionable ideas to help the company reduce employee turnover effectively. They emphasize the importance of fair pay, reasonable workloads, flexible working conditions, and good management relationships. 
