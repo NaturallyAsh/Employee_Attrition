@@ -56,40 +56,6 @@ source("theme/project_theme.R")
 ```
 
 
-```{r}
-# Data quality assessment
-# data_quality <- data |>
-#   summarise(across(everything(), 
-#                   list(missing = ~sum(is.na(.))/length(.)*100,
-#                        unique = ~n_distinct(.),
-#                        min = ~ifelse(is.numeric(.), min(., na.rm = TRUE), NA),
-#                        max = ~ifelse(is.numeric(.), max(., na.rm = TRUE), NA)))) |>
-#   pivot_longer(everything(), 
-#                names_to = c("column", "stat"), 
-#                names_pattern = "(.*)_(.*)") |>
-#   pivot_wider(names_from = stat, values_from = value)
-# 
-# kbl(data_quality) |>
-#   kable_styling() |>
-#   add_header_above(c("Data Quality Assessment" = 5))
-```
-
-
-
-
-```{r}
-# Applying transformations to multiple variables
-# data <- data |>
-#   mutate(across(where(is.character), as_factor)) |>
-#   mutate(Attrition_binary = if_else(Attrition == "Yes", 1, 0)) |>
-#   relocate(Attrition_binary, .after = Attrition) |>
-#   mutate(
-#     Attrition = fct_relevel(Attrition, "Yes", "No"),
-#     BusinessTravel = fct_relevel(BusinessTravel, "Non-Travel", "Travel_Rarely", "Travel_Frequently"),
-#     Gender = fct_relevel(Gender, "Male", "Female"),
-#     OverTime = fct_relevel(OverTime, "No", "Yes")
-#   )
-```
 
 ## Exploring Employee Attrition: the Big Picture 
 
@@ -109,7 +75,7 @@ total_attrition <- data |>
 
 ggplot(total_attrition, aes(x = Attrition, y = percentage, fill = Attrition)) +
   geom_col(width = 0.7) +
-  scale_y_continuous(labels = label_percent(scale = 1), breaks = c(0, 25, 50, 75, 100), limits = c(0,105)) + # Set y-axis limit to 0-100 for percentage
+  scale_y_continuous(labels = label_percent(scale = 1), breaks = c(0, 25, 50, 75, 100), limits = c(0, 105)) + # Set y-axis limit to 0-100 for percentage
   geom_text(aes(label = paste0(round(percentage), "%")), data = total_attrition |> filter(Attrition == "Yes"), vjust = -1, size = 4) +
   geom_text(aes(label = paste0(round(percentage), "%")), data = total_attrition |> filter(Attrition == "No"), vjust = -1, size = 4) +
   # paste0(percent, "%"), parse = TRUE
@@ -117,12 +83,10 @@ ggplot(total_attrition, aes(x = Attrition, y = percentage, fill = Attrition)) +
   xlab("Attrition") +
   ggtitle("Company-wide Employee Attrition Rate (%)") +
   project_theme() +
-  theme(
-    # axis.title.y = element_blank()
-  ) +
   scale_fill_manual(
     values = c(STEELBLUE, SALMON),
-    labels = c("Yes" = "Left Company", "No" = "Stayed"))
+    labels = c("Yes" = "Left Company", "No" = "Stayed")
+  )
 ```
 
 
@@ -134,11 +98,9 @@ About 16% of employees left the organization, while 84% remained.
 
 ```{r}
 
-# Calculate job role attrition metrics
 attrition_jobrole <- data |>
   group_by(JobRole, Attrition) |>
   summarise(count = n(), .groups = 'drop') |>
-  # Calculate totals and percentages by job role
   group_by(JobRole) |>
   mutate(
     role_total = sum(count),
@@ -150,12 +112,9 @@ attrition_jobrole <- data |>
 attrition_rates <- attrition_jobrole |>
   filter(Attrition == "Yes") |>
   select(JobRole, count, role_total, percentage) |>
-  # Sort by attrition rate for highlighting
   arrange(desc(percentage)) |>
-  # Add rank for sorting
   mutate(
-    rank = row_number(),
-    # Create formatted labels
+    rank = row_number(), # Add rank for sorting
     rate_label = paste0(percentage, "%"),
     count_label = paste0(count, " of ", role_total)
   )
@@ -165,18 +124,15 @@ attrition_yes <- attrition_jobrole |>
   filter(Attrition == 'Yes') |>
   mutate(
     count_neg = -count,  # Make 'Yes' counts negative for pyramid effect
-    # Create percentage label
     label = paste0(percentage, "%")
   )
 
 attrition_no <- attrition_jobrole |>
   filter(Attrition == 'No') |>
   mutate(
-    # Create percentage label
     label = paste0(percentage, "%")
-  )
+    )
 
-# Join the rank information to the yes/no dataframes
 attrition_yes <- attrition_yes |>
   left_join(attrition_rates |> select(JobRole, rank), by = "JobRole")
 
@@ -185,98 +141,20 @@ attrition_no <- attrition_no |>
 
 
 
-# Create the improved pyramid plot
-ggplot() +
-  geom_bar(
-    data = attrition_yes, 
-    aes(
-      x = reorder(JobRole, -rank), 
-      y = count_neg
-    ), 
-    stat = "identity", 
-    width = 0.7,
-    fill = SALMON  # Red for all attrition bars
-  ) +
-  geom_bar(
-    data = attrition_no, 
-    aes(
-      x = reorder(JobRole, -rank), 
-      y = count
-    ), 
-    stat = "identity", 
-    width = 0.7,
-    fill = STEELBLUE  # Blue for all retention bars
-  ) +
-  # Add percentage labels
-  geom_text(
-    data = attrition_no, 
-    aes(
-      x = reorder(JobRole, -rank), 
-      y = count + 10, 
-      label = label
-    ),
-    hjust = 0, 
-    size = 3.5,
-    color = STEELBLUE,
-    fontface = "bold"
-  ) +
-  geom_text(
-    data = attrition_yes, 
-    aes(
-      x = reorder(JobRole, -rank), 
-      y = count_neg - 10, 
-      label = label
-    ),
-    hjust = 1, 
-    size = 3.5,
-    color = SALMON,  # Red for all attrition percentage labels
-    fontface = "bold"
-  ) +
-  # Add count labels
-  geom_text(
-    data = attrition_no, 
-    aes(
-      x = reorder(JobRole, -rank), 
-      y = count/2, 
-      label = count
-    ),
-    size = 3,
-    color = WHITE
-  ) +
-  geom_text(
-    data = attrition_yes, 
-    aes(
-      x = reorder(JobRole, -rank), 
-      y = count_neg/2, 
-      label = abs(count_neg)
-    ),
-    size = 3,
-    color = WHITE
-  ) +
-  # Add a reference line for the company average
-  geom_hline(
-    yintercept = 0,
-    color = "#666666",
-    size = 0.5
-  ) +
-  scale_y_continuous(
-    labels = function(x) paste0(abs(x)),
-    breaks = seq(-300, 300, 100)
-  ) +
-  coord_flip() +
-  # Add meaningful labels
-  labs(
-    title = "Job Roles with Highest Attrition Risk",
-    subtitle = "Percentage of employees who left vs. stayed by job role",
-    x = NULL,
-    y = "Number of Employees",
-    caption = "Red bars indicate roles with highest attrition rates"
-  ) +
-  project_theme() +
-  theme(
-    plot.caption.position = "panel"
-  ) +
-  expand_limits(y=c(-100, 300))
+ggplot() + 
+  geom_bar(data = attrition_yes, aes(x = reorder(JobRole, -rank), y = count_neg), stat = "identity", width = 0.7, fill = SALMON) + 
+  geom_bar(data = attrition_no, aes(x = reorder(JobRole, -rank), y = count), stat = "identity", width = 0.7, fill = STEELBLUE) + 
+  geom_text(data = attrition_no, aes(x = reorder(JobRole, -rank), y = count + 10, label = label), hjust = 0, size = 3.5, color = STEELBLUE, fontface = "bold") + 
+  geom_text(data = attrition_yes, aes(x = reorder(JobRole, -rank), y = count_neg - 10, label = label), hjust = 1, size = 3.5, color = SALMON, fontface = "bold") + 
+  geom_text(data = attrition_no, aes(x = reorder(JobRole, -rank), y = count / 2, label = count), size = 3, color = WHITE) + 
+  geom_text(data = attrition_yes, aes(x = reorder(JobRole, -rank), y = count_neg / 2, label = abs(count_neg)), size = 3, color = WHITE) + 
+  geom_hline(yintercept = 0, color = GRAY50, size = 0.5) + 
+  scale_y_continuous(labels = function(x) paste0(abs(x)), breaks = seq(-300, 300, 100)) + 
+  coord_flip() + 
+  labs(title = "Job Roles with Highest Attrition Risk", subtitle = "Percentage of employees who left vs. stayed by job role", x = NULL, y = "Number of Employees", caption = "Red bars indicate roles with highest attrition rates") + 
+  project_theme() + 
+  theme(plot.caption.position = "panel") + 
+  expand_limits(y = c(-100, 300))
 ```
 
 
@@ -301,53 +179,18 @@ department_colors <- c(
   "Human Resources" = METALGEAR
 )
 
-ggplot(attrition_dept, aes(x = 2, y = percentage, fill = Department)) +
-  geom_bar(stat = "identity", color = WHITE, linewidth = 0.2) +
-  coord_polar(theta = "y", start = 0) +
-  scale_fill_manual(values = department_colors) +
-  geom_label_repel(aes(label = paste0(sprintf("%.1f", percentage), "%")),
-                   position = position_stack(vjust = 0.5), # Initial position - may be overridden by repel
-                   color = "black", size = 4,
-                   segment.size = 0.3, segment.color = "black",
-                   show.legend = FALSE, # Prevent labels from appearing in legend
-                   box.padding = 0.5, # Adjust padding around label box
-                   label.padding = unit(0.3, "lines"), # Adjust padding inside label box
-                   label.r = unit(0.15, "lines") # Rounded corners for label box
-  ) +
-  xlim(0.5, 2.5) + # Create the hole in the middle
-  ggtitle("Employee Attrition by Department") +
-  labs(caption = paste0(
-  "• Research & Development: ", 
-  "13.8% (accounts for 56.1% of all departures)\n",
-  "• Sales: ", 
-  "20.6% - highest attrition rate (accounts for 38.8% of all departures)\n",
-  "• Human Resources: ", 
-  "19% (accounts for 5.1% of all departures)"
-)) +
-  # project_theme() +
-  theme_void() + # Remove default theme elements
-  theme(
-    plot.title = element_text(hjust = 0.5, size = 14, face = "bold", color = BLACK), # Centered, bold title
-    legend.position = "right",
-    legend.title = element_blank(), # Remove legend title
-    legend.text = element_text(color = BLACK, margin = margin(r=10, l=5)), # Add margin to legend text
-    plot.background = element_rect(fill = LIGHTBEIGE, color = NA), # Background color
-    legend.key = element_rect(fill = NA, color = NA),
-    plot.caption = element_text(
-      hjust = 0, 
-      size = 10, 
-      lineheight = 1.2, 
-      margin = margin(t = 5, l = 10, b = 10),
-      face = "plain",
-      color = "#333333"
-    )
-  ) +
-  guides(fill = guide_legend(override.aes = list(
-    shape = 22, 
-    size = 8, 
-    color = GRAY50, 
-    label = "" 
-  )))
+ggplot(attrition_dept, aes(x = 2, y = percentage, fill = Department)) + 
+  geom_bar(stat = "identity", color = WHITE, linewidth = 0.2) + 
+  coord_polar(theta = "y", start = 0) + 
+  scale_fill_manual(values = department_colors) + 
+  geom_label_repel(aes(label = paste0(sprintf("%.1f", percentage), "%")), position = position_stack(vjust = 0.5), color = "black", size = 4, segment.size = 0.3, segment.color = "black", show.legend = FALSE, box.padding = 0.5, label.padding = unit(0.3, "lines"), label.r = unit(0.15, "lines")) + 
+  xlim(0.5, 2.5) + 
+  ggtitle("Employee Attrition by Department") + 
+  labs(caption = paste0("• Research & Development: ", "13.8% (accounts for 56.1% of all departures)\n", "• Sales: ", "20.6% - highest attrition rate (accounts for 38.8% of all departures)\n", "• Human Resources: ", "19% (accounts for 5.1% of all departures)")) + 
+  # project_theme() + 
+  theme_void() + 
+  theme(plot.title = element_text(hjust = 0, size = 14, face = "bold", color = BLACK), legend.position = "right", legend.title = element_blank(), legend.text = element_text(color = BLACK, margin = margin(r = 10, l = 5)), plot.background = element_rect(fill = LIGHTBEIGE, color = NA), legend.key = element_rect(fill = NA, color = NA), plot.caption = element_text(hjust = 0, size = 10, lineheight = 1.2, margin = margin(t = 5, l = 10, b = 10), face = "plain", color = "#333333")) + 
+  guides(fill = guide_legend(override.aes = list(shape = 22, size = 8, color = GRAY50, label = "")))
 
 
 ```
@@ -362,7 +205,6 @@ Over half of all attrition (56%) came from the Research & Development department
 
 ```{r}
 # # Attrition by Job Role and Department
-# # Create a heatmap of attrition by job role and department
 # heatmap_data <- data |>
 #   mutate(Attrition_binary = if_else(Attrition == "Yes", 1, 0)) |> 
 #   group_by(JobRole, Department) |>
@@ -410,7 +252,7 @@ income_summary <- data |>
     percent_diff = (income_diff / mean_income[Attrition == "Yes"]) * 100
   )
 
-# Create a rich text annotation using grobTree
+# Create annotation using grobTree
 income_grob <- grobTree(richtext_grob(
   paste0(
     "Employees who stay earn <span style='color:#1F77B4;font-weight:bold;'>$", 
@@ -432,73 +274,16 @@ income_grob <- grobTree(richtext_grob(
   r = unit(4, "pt")
 ))
 
-# Create the improved visualization
-ggplot(data, aes(x = Attrition, y = MonthlyIncome, fill = Attrition)) +
-  # Use violin plots to show distribution
-  geom_violin(alpha = 0.7, width = 0.8) +
-  # Add boxplots to show quartiles
-  geom_boxplot(width = 0.2, color = WHITE, alpha = 0.9) +
-  # Add mean income points
-  stat_summary(
-    fun = mean, 
-    geom = "point", 
-    shape = 23, 
-    size = 5, 
-    color = WHITE, 
-    fill = BLACK
-  ) +
-  # Add mean income labels
-  # stat_summary(
-  #   fun = mean,
-  #   geom = "text",
-  #   aes(label = paste0("$", format(round(..y..), big.mark = ","))),
-  #   vjust = -1.5,
-  #   size = 4,
-  #   fontface = "bold"
-  # ) +
-  # Add annotation
-  annotation_custom(income_grob) +
-  # Add an arrow annotation showing the difference
-  annotate(
-    "segment",
-    x = 1.1, xend = 1.9,
-    y = income_summary$mean_income[income_summary$Attrition == "Yes"] + 1000,
-    yend = income_summary$mean_income[income_summary$Attrition == "No"] - 1000,
-    arrow = arrow(length = unit(0.3, "cm"), ends = "both"),
-    color = BLACK,
-    # linetype = "dashed",
-    size = 0.6
-  ) +
-  annotate(
-    "text",
-    x = 1.5,
-    y = (income_summary$mean_income[income_summary$Attrition == "Yes"] + 
-         income_summary$mean_income[income_summary$Attrition == "No"]) / 2 + 1500,
-    label = paste0("$", format(round(income_summary$income_diff), big.mark = ","), "/month difference"),
-    color = BLACK,
-    fontface = "bold",
-    size = 3.4
-  ) +
-  # Set colors
-  scale_fill_manual(
-    values = c("Yes" = SALMON, "No" = STEELBLUE),
-    labels = c("Yes" = "Left Company", "No" = "Stayed")
-  ) +
-  # Format y-axis as currency
-  scale_y_continuous(
-    labels = dollar_format(),
-    breaks = seq(0, 20000, 5000),
-    expand = expansion(mult = c(0, 0.2))
-  ) +
-  # Improve labels
-  labs(
-    title = "Employees Who Leave Earn Substantially Less",
-    subtitle = "Monthly income distribution by attrition status",
-    x = NULL,
-    y = "Monthly Income",
-    caption = "Black diamonds indicate mean values"
-  ) +
-  # Apply clean theme
+ggplot(data, aes(x = Attrition, y = MonthlyIncome, fill = Attrition)) + 
+  geom_violin(alpha = 0.7, width = 0.8) + 
+  geom_boxplot(width = 0.2, color = WHITE, alpha = 0.9) + 
+  stat_summary(fun = mean, geom = "point", shape = 23, size = 5, color = WHITE, fill = BLACK) + 
+  annotation_custom(income_grob) + 
+  annotate("segment", x = 1.1, xend = 1.9, y = income_summary$mean_income[income_summary$Attrition == "Yes"] + 1000, yend = income_summary$mean_income[income_summary$Attrition == "No"] - 1000, arrow = arrow(length = unit(0.3, "cm"), ends = "both"), color = BLACK, size = 0.6) + 
+  annotate("text", x = 1.5, y = (income_summary$mean_income[income_summary$Attrition == "Yes"] + income_summary$mean_income[income_summary$Attrition == "No"]) / 2 + 1500, label = paste0("$", format(round(income_summary$income_diff), big.mark = ","), "/month difference"), color = BLACK, fontface = "bold", size = 3.4) + 
+  scale_fill_manual(values = c("Yes" = SALMON, "No" = STEELBLUE), labels = c("Yes" = "Left Company", "No" = "Stayed")) + 
+  scale_y_continuous(labels = dollar_format(), breaks = seq(0, 20000, 5000), expand = expansion(mult = c(0, 0.2))) + 
+  labs(title = "Employees Who Leave Earn Substantially Less", subtitle = "Monthly income distribution by attrition status", x = NULL, y = "Monthly Income", caption = "Black diamonds indicate mean values") + 
   project_theme()
 ```
 
@@ -512,15 +297,13 @@ Employees who left generally earned significantly less money than those who stay
 
 ```{r}
 
-# Calculate attrition rates by age and tenure groups for annotation
+# Calculate attrition rates by age and tenure groups
 attrition_tenure <- data |>
   mutate(
-    # Create age groups
     AgeGroup = cut(Age, 
                   breaks = c(18, 30, 40, 50, 60), 
                   labels = c("18-30", "31-40", "41-50", "51-60"),
                   include.lowest = TRUE),
-    # Create tenure groups
     TenureGroup = cut(YearsAtCompany,
                      breaks = c(0, 2, 5, 10, 20, 40),
                      labels = c("0-2", "3-5", "6-10", "11-20", "21+"),
@@ -534,19 +317,17 @@ attrition_tenure <- data |>
     .groups = 'drop'
   )
 
-# Find the highest attrition rate group for annotation
 highest_attrition <- attrition_tenure |>
   filter(!is.na(AgeGroup) & !is.na(TenureGroup)) |>
   arrange(desc(AttritionRate)) |>
   slice(1)
 
-# Find the lowest attrition rate group for annotation
 lowest_attrition <- attrition_tenure |>
   filter(!is.na(AgeGroup) & !is.na(TenureGroup) & TotalCount >= 10) |>
   arrange(AttritionRate) |>
   slice(1)
 
-# Create a rich text annotation using grobTree
+# Create annotation using grobTree
 attrition_grob <- grobTree(richtext_grob(
   paste0(
     "<span style='color:#D62728;font-weight:bold;'>Highest Risk:</span> ", 
@@ -568,86 +349,25 @@ attrition_grob <- grobTree(richtext_grob(
   r = unit(4, "pt")
 ))
 
-# Create the visualization
-ggplot(data, aes(x = Age, y = YearsAtCompany)) +
-  # Add a 2D density hexbin layer
-  geom_hex(aes(fill = ..density..), bins = 15) +
-  # Add points colored by attrition
-  geom_point(
-    aes(color = Attrition, size = Attrition),
-    alpha = 0.7,
-    position = position_jitter(width = 0.5, height = 0.5, seed = 123)
-  ) +
-  # Add contour lines for attrition density
-  stat_density_2d(
-    data = data |> filter(Attrition == "Yes"),
-    aes(x = Age, y = YearsAtCompany),
-    color = RED,
-    alpha = 0.7,
-    linewidth = 0.7,
-    contour = TRUE
-  ) +
-  # Add annotation
-  annotation_custom(attrition_grob) +
-  # Highlight high-risk areas with improved visibility
-  annotate(
-    "rect",
-    xmin = 25, xmax = 35,
-    ymin = 0, ymax = 5,
-    fill = WHITE, alpha = 0.4,  # White background for contrast
-    color = RED, linewidth = 1.5, linetype = "dashed"
-  ) +
-  # Improved high-risk label with white background for visibility
-  annotate(
-    "label",
-    x = 30, y = 6,
-    label = "HIGH ATTRITION RISK ZONE",
-    color = WHITE,
-    fill = RED,
-    fontface = "bold",
-    size = 3.5,
-    label.padding = unit(0.5, "lines"),
-    label.r = unit(0.2, "lines")
-  ) +
-  # Set colors and sizes
-  viridis::scale_fill_viridis(
-    option = "plasma",
-    name = "Employee\nDensity"
-  ) +
-  scale_color_manual(
-    values = c("Yes" = RED, "No" = STEELBLUE),
-    labels = c("Yes" = "Left Company", "No" = "Stayed"),
-    name = "Attrition"
-  ) +
-  scale_size_manual(
-    values = c("Yes" = 3, "No" = 1.5),
-    guide = "none"
-  ) +
-  # Set axis scales
-  scale_x_continuous(
-    breaks = seq(20, 60, by = 5),
-    limits = c(18, 60)
-  ) +
-  scale_y_continuous(
-    breaks = seq(0, 40, by = 5),
-    limits = c(0, 40)
-  ) +
-  # Improve labels
-  labs(
-    title = "Younger Employees with Short Tenure Have Highest Attrition Risk",
-    subtitle = "Relationship between age, years at company, and attrition",
-    x = "Age",
-    y = "Years at Company",
-    caption = "Red contour lines show areas of high attrition density"
-  ) +
-  project_theme() +
-  theme(
-    plot.margin = margin(0.5, 0.2, 0.2, 0.5, "cm"),
-    plot.title = element_text(hjust = 0.2)
-  )
+ggplot(data, aes(x = Age, y = YearsAtCompany)) + 
+  geom_point(aes(color = Attrition, size = Attrition), alpha = 0.7, position = position_jitter(width = 0.5, height = 0.5, seed = 123)) + 
+  stat_density_2d(data = data |> filter(Attrition == "Yes"), aes(x = Age, y = YearsAtCompany), color = RED, alpha = 0.7, linewidth = 0.7, contour = TRUE) + 
+  annotation_custom(attrition_grob) + 
+  annotate("rect", xmin = 25, xmax = 35, ymin = 0, ymax = 5, fill = WHITE, alpha = 0.4, color = RED, linewidth = 1.5, linetype = "dashed") + 
+  annotate("label", x = 30, y = 6, label = "HIGH ATTRITION RISK ZONE", color = WHITE, fill = RED, fontface = "bold", size = 3.5, label.padding = unit(0.5, "lines"), label.r = unit(0.2, "lines")) + 
+  viridis::scale_fill_viridis(option = "plasma", name = "Employee\nDensity") + 
+  scale_color_manual(values = c("Yes" = RED, "No" = STEELBLUE), labels = c("Yes" = "Left Company", "No" = "Stayed"), name = "Attrition") + 
+  scale_size_manual(values = c("Yes" = 3, "No" = 1.5), guide = "none") + 
+  scale_x_continuous(breaks = seq(20, 60, by = 5), limits = c(18, 60)) + 
+  scale_y_continuous(breaks = seq(0, 40, by = 5), limits = c(0, 40)) + 
+  labs(title = "Younger Employees with Short Tenure Have Highest Attrition Risk", subtitle = "Relationship between age, years at company, and attrition", x = "Age", y = "Years at Company", caption = "Red contour lines show areas of high attrition density") + 
+  project_theme() + 
+  theme(plot.margin = margin(0.5, 0.2, 0.2, 0.5, "cm"), plot.title = element_text(hjust = 0.2))
 ```
 
 Younger employees with fewer years at the company have the highest attrition risk, while older employees with longer tenure are most likely to stay. The pattern is immediately visible through the concentration of red points and contour lines in the lower-left portion of the plot.
+
+
 
 
 ### Taking a Closer Look at Work-Life Balance Factors 
@@ -662,34 +382,28 @@ wlb_vars <- data |>
 ```
 
 
-
-
 #### Frequency of Business Travel 
 
 
 ```{r}
-# Improved Business Travel by Attrition plot with adjusted text positioning
+# Business Travel by Attrition
 busi <- wlb_vars |>
   group_by(BusinessTravel, Attrition) |>
   summarise(count = n(), .groups = 'drop') |>
-  # Calculate percentages within each travel category for better comparison
   group_by(BusinessTravel) |>
   mutate(
     group_total = sum(count),
     percentage = round(count / group_total * 100, 1)
   ) |>
   ungroup() |>
-  # Add a flag for highlighting the "Yes" attrition group
   mutate(
     highlight = Attrition == "Yes",
-    # Create more readable labels for BusinessTravel
     TravelCategory = case_when(
       BusinessTravel == "Non-Travel" ~ "No Travel",
       BusinessTravel == "Travel_Rarely" ~ "Rare Travel",
       BusinessTravel == "Travel_Frequently" ~ "Frequent Travel",
       TRUE ~ as.character(BusinessTravel)
     ),
-    # Create a factor with the correct order
     TravelOrder = factor(TravelCategory, 
                          levels = c("No Travel", "Rare Travel", "Frequent Travel"))
   )
@@ -701,47 +415,17 @@ busi_grob <- grobTree(richtext_grob(
 
 
 
-# Create the improved plot with adjusted text positioning
-ggplot(busi, aes(x = TravelOrder, y = percentage, fill = Attrition)) +
-  geom_col(position = position_dodge(width = 0.7), width = 0.6) +
-  # Add data labels with increased vertical offset
-  geom_text(
-    aes(
-      label = paste0(percentage, "%"),
-      y = percentage + 5,  # Increased vertical offset
-      color = Attrition
-    ),
-    position = position_dodge(width = 0.7),
-    size = 3.5,
-    fontface = "bold"
-  ) +
-  annotation_custom(busi_grob, xmin = 0.2, ymin = -10) +
-  annotate("segment", x = 0.9, xend = 2.75, y = 18, yend = 35,
-       colour = SALMON, linetype = "dashed") +
-  # Set appropriate scales with more room at the top
-  scale_y_continuous(
-    limits = c(0, 100),
-    breaks = seq(0, 100, 20),
-    labels = function(x) paste0(x, "%"),
-    expand = expansion(mult = c(0, 0.1))  # Adjusted expansion
-  ) +
-  scale_fill_manual(
-    values = c("Yes" = SALMON, "No" = STEELBLUE),
-    labels = c("Yes" = "Left Company", "No" = "Stayed")
-  ) +
-  scale_color_manual(
-    values = c("Yes" = SALMON, "No" = STEELBLUE)
-  ) +
-  # Add meaningful labels
-  labs(
-    title = "Business Travel Significantly Increases Attrition Risk",
-    subtitle = "Percentage of employees who stay vs. leave by travel frequency",
-    x = NULL,
-    y = "Percentage of Employees",
-  ) +
-  # theme_story +
-  project_theme() +
-  guides(color = "none")  # Hide the color legend since it's redundant with fill
+ggplot(busi, aes(x = TravelOrder, y = percentage, fill = Attrition)) + 
+  geom_col(position = position_dodge(width = 0.7), width = 0.6) + 
+  geom_text(aes(label = paste0(percentage, "%"), y = percentage + 5, color = Attrition), position = position_dodge(width = 0.7), size = 3.5, fontface = "bold") + 
+  annotation_custom(busi_grob, xmin = 0.2, ymin = -10) + 
+  annotate("segment", x = 0.9, xend = 2.75, y = 18, yend = 35, colour = SALMON, linetype = "dashed") + 
+  scale_y_continuous(limits = c(0, 100), breaks = seq(0, 100, 20), labels = function(x) paste0(x, "%"), expand = expansion(mult = c(0, 0.1))) + 
+  scale_fill_manual(values = c("Yes" = SALMON, "No" = STEELBLUE), labels = c("Yes" = "Left Company", "No" = "Stayed")) + 
+  scale_color_manual(values = c("Yes" = SALMON, "No" = STEELBLUE)) + 
+  labs(title = "Business Travel Significantly Increases Attrition Risk", subtitle = "Percentage of employees who stay vs. leave by travel frequency", x = NULL, y = "Percentage of Employees") + 
+  project_theme() + 
+  guides(color = "none")
 
 ```
 
@@ -756,10 +440,8 @@ There is a clear association between business travel frequency and attrition: **
 
 
 ```{r}
-# Improved Distance From Home plot with grobTree annotation
 distance_data <- wlb_vars
 
-# Calculate summary statistics for annotation
 distance_summary <- distance_data |>
   group_by(Attrition) |>
   summarise(
@@ -769,11 +451,9 @@ distance_summary <- distance_data |>
   )
 
 
-# Get mean distances for annotation
 mean_yes <- sprintf("%.1f", distance_summary$mean_distance[distance_summary$Attrition == "Yes"])
 mean_no <- sprintf("%.1f", distance_summary$mean_distance[distance_summary$Attrition == "No"])
 
-# Create a grobTree for the annotation using paste0() for string concatenation
 distance_grob <- grobTree(richtext_grob(
   paste0("<span style='font-size:9pt;font-weight:bold'>Mean distance: <span style='color:#D62728;font-weight:bold;'>",
          mean_yes, 
@@ -788,69 +468,25 @@ distance_grob <- grobTree(richtext_grob(
   r = unit(4, "pt")
 ))
 
-# Create the improved density plot
-ggplot(distance_data, aes(x = DistanceFromHome, fill = Attrition)) +
-  # Add histogram in background for context
-  geom_histogram(aes(y = ..density..), 
-                alpha = 0.3, 
-                position = "identity",
-                bins = 30) +
-  # Add smoothed density curves
-  geom_density(alpha = 0.7) +
-  # Add vertical lines for mean distances
-  geom_vline(data = distance_summary,
-             aes(xintercept = mean_distance, color = Attrition),
-             linetype = "dashed",
-             size = 1) +
-  annotation_custom(
-    distance_grob, 
-    xmin = -10,
-    ymin = 0.05
-  ) +
-  # Add a rectangle to highlight the long-distance area
-  annotate(
-    "rect",
-    xmin = 15,
-    xmax = max(distance_data$DistanceFromHome, na.rm = TRUE),
-    ymin = 0,
-    ymax = 0.04,
-    alpha = 0.2,
-    fill = SALMON
-  ) +
-  # Set appropriate scales
-  scale_x_continuous(
-    breaks = seq(0, max(distance_data$DistanceFromHome, na.rm = TRUE), by = 5),
-    expand = expansion(mult = c(0, 0.15))
-  ) +
-  scale_y_continuous(
-    labels = scales::percent_format(accuracy = 1),
-    expand = expansion(mult = c(0, 0.2))
-  ) +
-  scale_fill_manual(
-    values = c("Yes" = SALMON, "No" = STEELBLUE),
-    labels = c("Yes" = "Left Company", "No" = "Stayed")
-  ) +
-  scale_color_manual(
-    values = c("Yes" = SALMON, "No" = STEELBLUE)
-  ) +
-  # Add meaningful labels
-  labs(
-    title = "Commute Distance Impacts Employee Retention",
-    subtitle = "Employees who leave tend to have longer commutes",
-    x = "Distance From Home (miles)",
-    y = "Density",
-  ) +
-  project_theme() +
-  theme(
-    legend.frame = element_rect(color = WHITE),
-    legend.background = element_rect(color = WHITE)
-  ) +
-  guides(color = "none")  # Hide the color legend since it's redundant with fill
+ggplot(distance_data, aes(x = DistanceFromHome, fill = Attrition)) + 
+  geom_histogram(aes(y = ..density..), alpha = 0.3, position = "identity", bins = 30) + 
+  geom_density(alpha = 0.7) + 
+  geom_vline(data = distance_summary, aes(xintercept = mean_distance, color = Attrition), linetype = "dashed", size = 1) + 
+  annotation_custom(distance_grob, xmin = -10, ymin = 0.05) + 
+  annotate("rect", xmin = 15, xmax = max(distance_data$DistanceFromHome, na.rm = TRUE), ymin = 0, ymax = 0.04, alpha = 0.3, fill = SALMON) + 
+  scale_x_continuous(breaks = seq(0, max(distance_data$DistanceFromHome, na.rm = TRUE), by = 5), expand = expansion(mult = c(0, 0.15))) + 
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1), expand = expansion(mult = c(0, 0.2))) + 
+  scale_fill_manual(values = c("Yes" = SALMON, "No" = STEELBLUE), labels = c("Yes" = "Left Company", "No" = "Stayed")) + 
+  scale_color_manual(values = c("Yes" = SALMON, "No" = STEELBLUE)) + 
+  labs(title = "Commute Distance Impacts Employee Retention", subtitle = "Employees who leave tend to have longer commutes", x = "Distance From Home (miles)", y = "Density") + 
+  project_theme() + 
+  theme(legend.frame = element_rect(color = WHITE), legend.background = element_rect(color = WHITE)) + 
+  guides(color = "none")
 ```
 
 
 
-The density plot indicates a higher concentration of former employees (Attrition = Yes) living further from the office. While not a definitive causal relationship, this suggests that longer commutes may contribute to attrition. This could be due to increased stress, reduced work-life balance, or a weaker connection to the company culture. 
+The density plot indicates a higher concentration of former employees (Attrition = Yes) living further from the office. While not a definitive causal relationship, this suggests that longer commutes may contribute to attrition. This could be due to increased stress, reduced work-life balance, or a connection to the company culture. 
 
 
 
@@ -863,26 +499,23 @@ The density plot indicates a higher concentration of former employees (Attrition
 overtime_data <- wlb_vars |>
   group_by(OverTime, Attrition) |>
   summarise(count = n(), .groups = 'drop') |>
-  # Calculate percentages within each overtime category
   group_by(OverTime) |>
   mutate(
     group_total = sum(count),
     percentage = round(count / group_total * 100, 1)
   ) |>
   ungroup() |>
-  # Calculate total counts for annotation
   mutate(
     total_label = paste0("n=", group_total)
   )
 
-# Calculate the difference in attrition percentages for annotation
+# Calculate the difference in attrition percentages
 yes_no <- overtime_data |>
   select(OverTime, Attrition, percentage) |>
   pivot_wider(names_from = Attrition, values_from = percentage) |>
   mutate(difference = Yes - No)
 
 
-# Create a grobTree for the annotation
 overtime_grob <- grobTree(richtext_grob(
   paste0("Employees who work overtime <br>are <span style='color:#D62728;font-weight:bold;'>",
          round(yes_no$Yes[yes_no$OverTime == "Yes"] / yes_no$Yes[yes_no$OverTime == "No"], 1),
@@ -895,61 +528,17 @@ overtime_grob <- grobTree(richtext_grob(
   r = unit(4, "pt")
 ))
 
-# Create the improved plot
-ggplot(overtime_data, aes(x = OverTime, y = percentage, fill = Attrition)) +
-  # Add columns with improved spacing
-  geom_col(position = position_dodge(width = 0.7), width = 0.6) +
-  # Add percentage labels
-  geom_text(
-    aes(
-      label = paste0(percentage, "%"),
-      y = percentage + 3,  # Position above the bar
-      color = Attrition
-    ),
-    position = position_dodge(width = 0.7),
-    size = 3.5,
-    fontface = "bold"
-  ) +
-  # Add the grobTree annotation
-  annotation_custom(
-    overtime_grob, 
-    xmin = 0.2, 
-    ymin = 70,
-  ) +
-  # Add a connector arrow to highlight the key difference
-  annotate(
-    "segment",
-    x = 1.5,
-    xend = 1.7,
-    y = 78,
-    yend = 40,
-    arrow = arrow(length = unit(0.3, "cm")),
-    color = SALMON,
-    size = 0.8
-  ) +
-  # Set appropriate scales
-  scale_y_continuous(
-    limits = c(-5, 100),  # Extended below 0 for total count labels
-    breaks = seq(0, 100, 20),
-    labels = function(x) ifelse(x < 0, "", paste0(x, "%")),
-    expand = expansion(mult = c(0, 0.1))
-  ) +
-  scale_fill_manual(
-    values = c("Yes" = SALMON, "No" = STEELBLUE),
-    labels = c("Yes" = "Left Company", "No" = "Stayed")
-  ) +
-  scale_color_manual(
-    values = c("Yes" = SALMON, "No" = STEELBLUE)
-  ) +
-  # Add meaningful labels
-  labs(
-    title = "Overtime Significantly Increases Attrition Risk",
-    subtitle = "Percentage of employees who stay vs. leave by overtime status",
-    # x = NULL,
-    y = "Percentage of Employees",
-  ) +
-  project_theme() +
-  guides(color = "none")  # Hide the color legend since it's redundant with fill
+ggplot(overtime_data, aes(x = OverTime, y = percentage, fill = Attrition)) + 
+  geom_col(position = position_dodge(width = 0.7), width = 0.6) + 
+  geom_text(aes(label = paste0(percentage, "%"), y = percentage + 3, color = Attrition), position = position_dodge(width = 0.7), size = 3.5, fontface = "bold") + 
+  annotation_custom(overtime_grob, xmin = 0.2, ymin = 70) + 
+  annotate("segment", x = 1.5, xend = 1.7, y = 78, yend = 40, arrow = arrow(length = unit(0.3, "cm")), color = SALMON, size = 0.8) + 
+  scale_y_continuous(limits = c(-5, 100), breaks = seq(0, 100, 20), labels = function(x) ifelse(x < 0, "", paste0(x, "%")), expand = expansion(mult = c(0, 0.1))) + 
+  scale_fill_manual(values = c("Yes" = SALMON, "No" = STEELBLUE), labels = c("Yes" = "Left Company", "No" = "Stayed")) + 
+  scale_color_manual(values = c("Yes" = SALMON, "No" = STEELBLUE)) + 
+  labs(title = "Overtime Significantly Increases Attrition Risk", subtitle = "Percentage of employees who stay vs. leave by overtime status", y = "Percentage of Employees") + 
+  project_theme() + 
+  guides(color = "none")
 ```
 
 
@@ -964,36 +553,30 @@ We can clearly see that employees who work overtime are considerably more likely
 
 
 ```{r}
-# Improved Work-Life Balance by Attrition plot following storytelling with data principles
 wlb_data <- wlb_vars |>
   mutate(
-    # Convert to factor and add meaningful labels
     WorkLifeBalance = factor(WorkLifeBalance, 
                             levels = 1:4, 
                             labels = c("Poor", "Fair", "Good", "Excellent"))
   ) |>
   group_by(WorkLifeBalance, Attrition) |>
   summarise(count = n(), .groups = 'drop') |>
-  # Calculate percentages within each work-life balance category
   group_by(WorkLifeBalance) |>
   mutate(
     group_total = sum(count),
     percentage = round(count / group_total * 100, 1)
   ) |>
   ungroup() |>
-  # Calculate total counts for annotation
   mutate(
     total_label = paste0("n=", group_total)
   )
 
-# Calculate attrition percentages for trend analysis
 attrition_trend <- wlb_data |>
   filter(Attrition == "Yes") |>
   select(WorkLifeBalance, percentage, Attrition)
 
 
 
-# Create a grobTree for the annotation
 wlb_grob <- grobTree(richtext_grob(
   paste0("Employees reporting poor balance<br> are <span style='color:#D62728;font-weight:bold;'>",
          round(attrition_trend$percentage[attrition_trend$WorkLifeBalance == "Poor"] / 
@@ -1007,69 +590,18 @@ wlb_grob <- grobTree(richtext_grob(
   r = unit(4, "pt")
 ))
 
-# Create the improved plot
-ggplot(wlb_data, aes(x = WorkLifeBalance, y = percentage, fill = Attrition)) +
-  # Add columns with improved spacing
-  geom_col(position = position_dodge(width = 0.7), width = 0.6) +
-  # Add percentage labels
-  geom_text(
-    aes(
-      label = paste0(percentage, "%"),
-      y = percentage + 3,  # Position above the bar
-      color = Attrition
-    ),
-    position = position_dodge(width = 0.7),
-    size = 3.5,
-    fontface = "bold"
-  ) +
-  # Add a trend line for "Yes" attrition
-  geom_line(
-    data = attrition_trend,
-    aes(x = as.numeric(WorkLifeBalance), y = percentage + 7.5, group = 1),
-    color = SALMON,
-    linetype = "dashed",
-    size = 0.8
-  ) +
-  # Add the grobTree annotation
-  annotation_custom(
-    wlb_grob, 
-    xmin = -0.4, 
-    ymin = 15,
-  ) +
-  # Add a connector arrow to highlight the key difference
-  annotate(
-    "segment",
-    x = 2,
-    xend = 1.15,
-    y = 60,
-    yend = attrition_trend$percentage[attrition_trend$WorkLifeBalance == "Poor"] + 5,
-    arrow = arrow(length = unit(0.3, "cm")),
-    color = SALMON,
-    size = 0.8
-  ) +
-  # Set appropriate scales
-  scale_y_continuous(
-    limits = c(-5, 100),  # Extended below 0 for total count labels
-    breaks = seq(0, 100, 20),
-    labels = function(x) ifelse(x < 0, "", paste0(x, "%")),
-    expand = expansion(mult = c(0, 0.1))
-  ) +
-  scale_fill_manual(
-    values = c("Yes" = SALMON, "No" = STEELBLUE),
-    labels = c("Yes" = "Left Company", "No" = "Stayed")
-  ) +
-  scale_color_manual(
-    values = c("Yes" = SALMON, "No" = STEELBLUE)
-  ) +
-  # Add meaningful labels
-  labs(
-    title = "Poor Work-Life Balance Increases Attrition Risk",
-    subtitle = "Employees with poor work-life balance are much more likely to leave",
-    x = "Work-Life Balance Rating",
-    y = "Percentage of Employees",
-  ) +
-  project_theme() +
-  guides(color = "none")  # Hide the color legend since it's redundant with fill
+ggplot(wlb_data, aes(x = WorkLifeBalance, y = percentage, fill = Attrition)) + 
+  geom_col(position = position_dodge(width = 0.7), width = 0.6) + 
+  geom_text(aes(label = paste0(percentage, "%"), y = percentage + 3, color = Attrition), position = position_dodge(width = 0.7), size = 3.5, fontface = "bold") + 
+  geom_line(data = attrition_trend, aes(x = as.numeric(WorkLifeBalance), y = percentage + 9, group = 1), color = SALMON, linetype = "dashed", size = 0.8) + # trend line
+  annotation_custom(wlb_grob, xmin = -0.4, ymin = 15) + 
+  annotate("segment", x = 2, xend = 1.25, y = 60, yend = attrition_trend$percentage[attrition_trend$WorkLifeBalance == "Poor"] + 7, arrow = arrow(length = unit(0.3, "cm")), color = SALMON, size = 0.8) + 
+  scale_y_continuous(limits = c(-5, 100), breaks = seq(0, 100, 20), labels = function(x) ifelse(x < 0, "", paste0(x, "%")), expand = expansion(mult = c(0, 0.1))) + 
+  scale_fill_manual(values = c("Yes" = SALMON, "No" = STEELBLUE), labels = c("Yes" = "Left Company", "No" = "Stayed")) + 
+  scale_color_manual(values = c("Yes" = SALMON, "No" = STEELBLUE)) + 
+  labs(title = "Poor Work-Life Balance Increases Attrition Risk", subtitle = "Employees with poor work-life balance are much more likely to leave", x = "Work-Life Balance Rating", y = "Percentage of Employees") + 
+  project_theme() + 
+  guides(color = "none")
 ```
 
 
@@ -1094,7 +626,7 @@ After exploring factors related to employee turnover, I built a "Random Forest" 
 model_data <- data |>
   mutate(Attrition = factor(Attrition, levels = c("Yes", "No")))
 
-# Split data into training and testing sets (70% training, 30% testing)
+# Split data (70% training, 30% testing)
 set.seed(123)
 data_split <- initial_split(data = model_data, prop = 0.7, strata = Attrition)
 train_data <- training(data_split)
@@ -1108,7 +640,6 @@ data_recipe <- recipe(Attrition ~ ., data = train_data) |>
   step_normalize(all_numeric_predictors()) |> 
   step_zv(all_predictors())
 
-# Define Random Forest model specification
 rf_model <- rand_forest(mode = "classification", trees = 500) |>
   set_engine("ranger", importance = "impurity")
 
@@ -1117,15 +648,14 @@ rf_workflow <- workflow() |>
   add_recipe(data_recipe) |>
   add_model(rf_model)
 
-# Train the Random Forest model
+# Train the model
 rf_fit <- rf_workflow |> fit(data = train_data)
 
-# Evaluate model performance on test data
+# Evaluate model on test data
 predictions <- predict(rf_fit, test_data, type = "prob") |>
   bind_cols(predict(rf_fit, test_data)) |>
   bind_cols(test_data |> select(Attrition))
 
-# Calculate various performance metrics
 accuracy <- predictions |> metrics(truth = Attrition, estimate = .pred_class) |>
   filter(.metric == "accuracy") |> pull(.estimate)
 
@@ -1145,7 +675,6 @@ roc_auc_val <- predictions |>
   roc_auc(truth = Attrition, .pred_Yes) |>
   pull(.estimate)
 
-# Create confusion matrix
 conf_matrix <- predictions |>
   conf_mat(truth = Attrition, estimate = .pred_class)
 
@@ -1187,8 +716,6 @@ metrics_table <- tibble(
   kable_classic() |> 
   column_spec(1, bold = TRUE)
 
-
-
 metrics_table
 ```
 
@@ -1206,13 +733,11 @@ importance_data <- rf_fit |>
   extract_fit_parsnip() |>
   vip::vi() |>
   mutate(
-    # Improve variable names for display
     Variable = gsub("_", " ", Variable),
     Variable = gsub("BusinessTravel", "Business Travel: ", Variable),
     Variable = gsub("JobRole", "Job Role: ", Variable),
     Variable = gsub("MaritalStatus", "Marital Status: ", Variable),
-    # Create categories for coloring
-    Category = case_when(
+    Category = case_when( # Create categories
       grepl("Over[tT]ime", Variable) ~ "Work-Life Balance",
       grepl("Travel|Distance", Variable) ~ "Work-Life Balance",
       grepl("WorkLife|Environment", Variable) ~ "Work-Life Balance",
@@ -1225,10 +750,9 @@ importance_data <- rf_fit |>
       TRUE ~ "Other"
     )
   ) |>
-  # Take top 10 features
+  # Top 10 features
   slice_max(order_by = Importance, n = 10)
 
-# Create an enhanced feature importance plot
 importance_plot <- ggplot(importance_data, 
                          aes(x = fct_reorder(Variable, Importance), 
                              y = Importance,
@@ -1248,7 +772,6 @@ importance_plot <- ggplot(importance_data,
   ) +
   scale_fill_manual(
     values = c("Compensation" = TEAL, "Demographics & Tenure" = SALMON, "Work-Life Balance" = STEELBLUE),
-    # labels = c("Yes" = "Left Company", "No" = "Stayed")
   )
 
 importance_plot
