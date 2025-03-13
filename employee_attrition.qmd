@@ -1,13 +1,14 @@
 ---
 title: "Why Are Employees Leaving?"
-format: html
+format:
+  html:
+    embed-resources: true
 knitr:
   opts_chunk:
     echo: FALSE
     warning: FALSE
     message: FALSE
-editor: 
-  render-on-save: true
+
 ---
 
 Employee turnover (employees leaving a company) can cause serious challenges. High turnover affects a company's finances, culture, and long-term success. Here are some key problems it can create: 
