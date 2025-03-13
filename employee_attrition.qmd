@@ -189,7 +189,16 @@ ggplot(attrition_dept, aes(x = 2, y = percentage, fill = Department)) +
   labs(caption = paste0("• Research & Development: ", "13.8% (accounts for 56.1% of all departures)\n", "• Sales: ", "20.6% - highest attrition rate (accounts for 38.8% of all departures)\n", "• Human Resources: ", "19% (accounts for 5.1% of all departures)")) + 
   # project_theme() + 
   theme_void() + 
-  theme(plot.title = element_text(hjust = 0, size = 14, face = "bold", color = BLACK), legend.position = "right", legend.title = element_blank(), legend.text = element_text(color = BLACK, margin = margin(r = 10, l = 5)), plot.background = element_rect(fill = LIGHTBEIGE, color = NA), legend.key = element_rect(fill = NA, color = NA), plot.caption = element_text(hjust = 0, size = 10, lineheight = 1.2, margin = margin(t = 5, l = 10, b = 10), face = "plain", color = "#333333")) + 
+  theme(
+    plot.title = element_text(hjust = 0, size = 14, face = "bold", color = BLACK), 
+    legend.position = "right", 
+    legend.title = element_blank(), 
+    legend.text = element_text(color = BLACK, margin = margin(r = 10, l = 5)), 
+    plot.background = element_rect(fill = LIGHTBEIGE, color = NA), 
+    legend.key = element_rect(fill = NA, color = NA), 
+    plot.caption = element_text(hjust = 0, size = 10, lineheight = 1.2, margin = margin(t = 5, l = 10, b = 10), face = "plain", color = "#333333"),
+    plot.margin = margin(0.5, 0.2, 0.2, 0.5, "cm")
+    ) + 
   guides(fill = guide_legend(override.aes = list(shape = 22, size = 8, color = GRAY50, label = "")))
 
 
@@ -284,7 +293,7 @@ ggplot(data, aes(x = Attrition, y = MonthlyIncome, fill = Attrition)) +
   scale_fill_manual(values = c("Yes" = SALMON, "No" = STEELBLUE), labels = c("Yes" = "Left Company", "No" = "Stayed")) + 
   scale_y_continuous(labels = dollar_format(), breaks = seq(0, 20000, 5000), expand = expansion(mult = c(0, 0.2))) + 
   labs(title = "Employees Who Leave Earn Substantially Less", subtitle = "Monthly income distribution by attrition status", x = NULL, y = "Monthly Income", caption = "Black diamonds indicate mean values") + 
-  project_theme()
+  project_theme() 
 ```
 
 Employees who left generally earned significantly less money than those who stayed, suggesting salary is an important factor in attrition.
@@ -362,7 +371,7 @@ ggplot(data, aes(x = Age, y = YearsAtCompany)) +
   scale_y_continuous(breaks = seq(0, 40, by = 5), limits = c(0, 40)) + 
   labs(title = "Younger Employees with Short Tenure Have Highest Attrition Risk", subtitle = "Relationship between age, years at company, and attrition", x = "Age", y = "Years at Company", caption = "Red contour lines show areas of high attrition density") + 
   project_theme() + 
-  theme(plot.margin = margin(0.5, 0.2, 0.2, 0.5, "cm"), plot.title = element_text(hjust = 0.2))
+  theme(plot.title = element_text(hjust = 0.2))
 ```
 
 Younger employees with fewer years at the company have the highest attrition risk, while older employees with longer tenure are most likely to stay. The pattern is immediately visible through the concentration of red points and contour lines in the lower-left portion of the plot.
@@ -480,7 +489,9 @@ ggplot(distance_data, aes(x = DistanceFromHome, fill = Attrition)) +
   scale_color_manual(values = c("Yes" = SALMON, "No" = STEELBLUE)) + 
   labs(title = "Commute Distance Impacts Employee Retention", subtitle = "Employees who leave tend to have longer commutes", x = "Distance From Home (miles)", y = "Density") + 
   project_theme() + 
-  theme(legend.frame = element_rect(color = WHITE), legend.background = element_rect(color = WHITE)) + 
+  theme(
+    legend.frame = element_rect(color = WHITE), 
+    legend.background = element_rect(color = WHITE)) + 
   guides(color = "none")
 ```
 
