@@ -6,7 +6,5 @@
 .vscode
 .DS_Store
 .Rprofile
-theme
 unused.R
 employee_attrition_files
-!theme/project_theme.R
